@@ -74,12 +74,17 @@ const SHAFT_FRAGMENT = /* glsl */ `
     float along = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.72, vUv.y);
     // Cards are world-Z aligned; fade them out when seen edge-on so they never
     // read as flat sheets from a side camera.
-    float edgeOn = smoothstep(0.02, 0.42, abs(dot(normalize(cameraPosition - vWorld), vec3(0.0, 0.0, 1.0))));
+    vec3 toCamera = cameraPosition - vWorld;
+    float viewLength = max(length(toCamera), 1e-4);
+    float edgeOn = smoothstep(0.02, 0.42, abs(dot(toCamera / viewLength, vec3(0.0, 0.0, 1.0))));
     float streaks = 0.62 + 0.38 * noise(vec2(vUv.x * 5.0 + vSeed, vWorld.y * 1.7 - uTime * 0.035));
-    float body = across * along * streaks * edgeOn;
-    // Brighter where the beam leaves the skylight, thinning toward the water.
-    body *= mix(0.22, 1.0, pow(vUv.y, 0.8));
-    gl_FragColor = vec4(vColor * vIntensity * body, 1.0);
+    // Clamp every pow() base and the final radiance: interpolated UVs at the
+    // card border can be an ulp outside [0,1], and pow(negative, y) is NaN. NaN
+    // in an additive blend comes out black, which is exactly the hard 1 px
+    // dashed stroke this shader used to paint along each card edge.
+    float lift = mix(0.22, 1.0, pow(clamp(vUv.y, 0.0, 1.0), 0.8));
+    float body = max(across * along * streaks * edgeOn * lift, 0.0);
+    gl_FragColor = vec4(max(vColor, vec3(0.0)) * vIntensity * body, 1.0);
   }
 `;
 
@@ -224,7 +229,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
       height,
       tilt: sunLean,
       seed: index * 1.37,
-      intensity: (0.03 + rng.range(0, 0.012)) * intensity,
+      intensity: (0.026 + rng.range(0, 0.010)) * intensity,
       color: cool,
     });
     index += 1;
