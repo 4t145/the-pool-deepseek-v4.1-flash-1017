@@ -24,6 +24,7 @@ import {
 import { LAYOUT } from './layout';
 import { createNoiseTexture, createWaterNormalTexture } from './textures';
 import { MOUTH_WAKE, RING_WAKE, WATER_ETA } from '../core/waterOptics';
+import { addShaderHook } from '../core/shaderHooks';
 
 export interface WaterSystem {
   mesh: Mesh;
@@ -75,50 +76,14 @@ const CAUSTIC_GLSL =
   uniform float uCausticScale;
 ` + CAUSTIC_LATTICE_GLSL;
 
-type HookedMaterial = Material & {
-  userData: Record<string, unknown> & {
-    __poolShaderHooks?: Map<string, (shader: WebGLProgramParametersWithUniforms) => void>;
-  };
-};
-
-/**
- * Local, dependency-free version of the shared shader-hook helper being added by
- * w4 (`src/core/shaderHooks.ts`). It chains instead of replacing so tile POM,
- * stains and caustics can coexist on the same material. Swap to the shared helper
- * once it lands in the accepted head.
- */
-function addShaderHook(
-  material: Material,
-  key: string,
-  hook: (shader: WebGLProgramParametersWithUniforms) => void,
-): void {
-  const target = material as HookedMaterial;
-  // `Material.copy()` round-trips userData through JSON, so a cloned material
-  // can inherit a plain `{}` here instead of the Map. Rebuild in that case.
-  const stored = target.userData.__poolShaderHooks;
-  const hooks =
-    stored instanceof Map
-      ? (stored as Map<string, (shader: WebGLProgramParametersWithUniforms) => void>)
-      : new Map<string, (shader: WebGLProgramParametersWithUniforms) => void>();
-  if (stored !== hooks) {
-    target.userData.__poolShaderHooks = hooks;
-    const previous = target.onBeforeCompile;
-    const previousKey = target.customProgramCacheKey.bind(target);
-    target.onBeforeCompile = (shader, renderer) => {
-      previous.call(target, shader, renderer);
-      for (const entry of hooks.values()) entry(shader);
-    };
-    target.customProgramCacheKey = () => `${previousKey()}|pool:${[...hooks.keys()].join(',')}`;
-  }
-  hooks.set(key, hook);
-}
-
 /**
  * Underwater caustics for the basin tile, steps, lane band and the submerged
- * flume. The patch adds a world-space caustic light term to `outgoingLight`
- * before the opaque fragment is written, masked to fragments below the water
- * line. Materials are lit in the same pass that the refraction prepass and the
- * planar reflection see, so no extra render target or rebake is needed.
+ * flume. The caustic light is registered through the shared `addShaderHook`
+ * convention (src/core/shaderHooks.ts), so it chains with tile POM, flume
+ * staining and any later material patch. The term is added to `outgoingLight`
+ * before the opaque fragment, masked to fragments below the water line.
+ * Materials are lit in the same pass that the refraction prepass and the planar
+ * reflection see, so no extra render target or rebake is needed.
  */
 export function buildUnderwaterCaustics(): UnderwaterCaustics {
   const timeUniform = { value: 0 };
