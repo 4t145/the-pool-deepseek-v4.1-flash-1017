@@ -26,6 +26,7 @@ pass owns the display transform; do not apply a second gamma or tone map.
 | --- | --- |
 | `src/app/App.ts` | boot, render loop, resize, quality, capture API, UI |
 | `src/app/cinematics.ts` | shots, guided path, free look, camera transitions |
+| `src/app/cameraPath.ts` | closed-loop cinematic path: cyclic Hermite position + yaw/pitch orientation sampling |
 | `src/world/layout.ts` | authoritative dimensions, anchors, shots, cinematic keys |
 | `src/world/textures.ts` | tile/water/noise/sign texture generation |
 | `src/world/materials.ts` | shared material library |
@@ -61,6 +62,50 @@ matters for shot composition and the flume side.
 - ceiling `y = 8.6`
 - water `x ∈ [-7.2, 7.2]`, `z ∈ [-27.5, 27.5]`
 - camera shots are inside the hall; see `SHOTS` in `layout.ts`.
+
+## Props
+
+`src/world/props.ts` builds one static `Group`; `src/world/propLayout.ts` owns the
+pure maths (corkscrew sampling, ring float pose, railing spans) so it can be
+tested without WebGL (`tests/props.test.ts`).
+
+- `LAYOUT.slide` is the flume contract: `tower` (the tiled column the helix wraps,
+  x/z), `platformY`, `topY`, `helixRadius`, `tubeRadius`, and the mouth anchor
+  `end` (centre), `mouthRadius`, `mouthDirection` (unit axis out of the opening)
+  and `waterlineY`. Water/foam and capture tools should read these instead of
+  hard-coded points; `materials.redPlastic` is **not** used by the flume (two
+  clones with their own shader hooks are).
+- The flume is a corkscrew of open `TubeGeometry` (FrontSide) plus a slightly
+  smaller BackSide liner whose UV.x drives a throat-darkening gradient, so the
+  mouth is genuinely hollow. World-space stain/tide/scale/streak shading and a
+  tileable orange-peel normal are injected with `onBeforeCompile` on the clones;
+  `PropsSystem.causticTargets` exposes exactly those two materials for the water
+  caustics pass.
+- Rings are flattened toruses with printed vinyl textures, moulded seam tori and
+  valve hardware; the float pose is `ringFloatPose` (deterministic, ±11 mm bob,
+  waterline cuts the tube). Railings are split into spans with a bay at every
+  ladder (`railingSpans`) and the ladder handrails fill the bay, so nothing
+  intersects and every post lands on the deck.
+- Chrome hardware (rails, ladders, struts, collars, clamps, bolts, platform rail)
+  is merged into one mesh and the ring seams/valves merge per ring: the props
+  pass costs one draw call per material group instead of ~160.
+
+## Camera
+
+`SHOTS` in `layout.ts` is the framing contract for the seven stills. The guided
+take is a closed cycle through those seven poses plus a return key. It is
+sampled by `createClosedCameraPath` (`src/app/cameraPath.ts`): cubic Hermite in
+time; yaw/pitch orientation rather than an interpolated look-at point (so the
+wrap takes the short way round and a target cannot swing through the eye);
+monotone tangents at direction reversals to prevent overshoot into walls. The
+loop is C1-continuous in position and orientation; `tests/camera.test.ts`
+asserts the seam, the translation/pan rate caps, the flume clearance and that
+every composition pose is visited exactly. `CINEMATIC_DURATION` is 56 s; the
+composition beats are arrival 0 s, flume 6 s, ring 16 s, arch 21 s, tile 25.5 s,
+skylight 36.5 s, float 46.5 s, with one return key at 51 s. Segment times are
+paced against segment length so the whole take stays below 1.8 m/s peak
+translation and 13.3 deg/s peak pan (audit: `docs/evidence/camera-pacing.json`).
+The whole path is driven by the scene clock, so `renderAt(t)` stays deterministic.
 
 ## Water
 
