@@ -2,6 +2,8 @@
 
 made with `deepseek-v4.1-flash-1017` and [dsh-swarm](https://github.com/4t145/dsh-swarm)
 
+**Live demo:** https://4t145.github.io/the-pool-deepseek-v4.1-flash-1017/
+
 # THE POOL
 
 One flooded municipal pool hall, rendered in real time. White glazed tile, a long
