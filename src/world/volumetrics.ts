@@ -224,7 +224,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
       height,
       tilt: sunLean,
       seed: index * 1.37,
-      intensity: (0.052 + rng.range(0, 0.018)) * intensity,
+      intensity: (0.03 + rng.range(0, 0.012)) * intensity,
       color: cool,
     });
     index += 1;
@@ -245,7 +245,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     height: 5.4,
     tilt: 0,
     seed: 5.7,
-    intensity: 0.035 * intensity,
+    intensity: 0.02 * intensity,
     color: warm,
   });
 
@@ -293,7 +293,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     uniforms: {
       uTime: { value: 0 },
       uColor: { value: new Color(0xf2f6f4) },
-      uIntensity: { value: 0.34 * intensity },
+      uIntensity: { value: 0.16 * intensity },
       uPixelRatio: { value: 1 },
     },
   });
