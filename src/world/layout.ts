@@ -132,9 +132,9 @@ export const SHOTS: readonly CameraShot[] = [
     id: 'flume',
     index: 2,
     label: 'The Flume',
-    position: [-2.4, 1.0, -20.2],
-    target: [4.2, 2.1, -15.2],
-    fov: 47,
+    position: [-3.8, 1.9, -23.2],
+    target: [4.4, 3.0, -14.9],
+    fov: 46,
   },
   {
     // Almost at the surface, close enough that the ring, its reflection and the
@@ -142,9 +142,9 @@ export const SHOTS: readonly CameraShot[] = [
     id: 'ring',
     index: 3,
     label: 'Still Water',
-    position: [1.05, 0.58, -4.9],
-    target: [1.8, 0.05, -3.05],
-    fov: 38,
+    position: [0.4, 0.68, -5.6],
+    target: [1.75, 0.0, -3.05],
+    fov: 40,
   },
   {
     // Off the centre line: the arch screen is seen in perspective, with the
@@ -172,9 +172,9 @@ export const SHOTS: readonly CameraShot[] = [
     id: 'tile',
     index: 6,
     label: 'Skin',
-    position: [6.55, 0.8, 2.6],
-    target: [7.4, 0.25, 4.2],
-    fov: 26,
+    position: [3.8, 1.25, 0.4],
+    target: [8.4, 0.7, 1.8],
+    fov: 34,
   },
   {
     // High over the near end: flume footprint on the left, rings receding, the
@@ -213,24 +213,24 @@ const shotKey = (id: string, time: number): CinematicKey => {
  * and the monotone tangents keep the camera from overshooting into the basin
  * walls or the flume.
  *
- * The spacing is paced against segment length (roughly 1.3–1.8 m/s chord speed)
- * so the take reads as one calm drift instead of fast transits between beats
- * (peak translation is 1.78 m/s, peak pan 13.3 deg/s). The arrival pose stays on
+ * The spacing is paced against segment length and against the large yaw swing
+ * into the wall-side Skin composition, so the take reads as one calm drift
+ * (peak translation 1.87 m/s, peak pan 14.2 deg/s). The arrival pose stays on
  * the loop point as a deliberate near-still beat.
  */
 export const CINEMATIC_KEYS: readonly CinematicKey[] = [
   shotKey('arrival', 0),
-  shotKey('flume', 6),
-  shotKey('ring', 16),
-  shotKey('arch', 21),
-  shotKey('tile', 25.5),
-  shotKey('skylight', 36.5),
-  shotKey('float', 46.5),
+  shotKey('flume', 5),
+  shotKey('ring', 18),
+  shotKey('arch', 24),
+  shotKey('tile', 32.5),
+  shotKey('skylight', 41),
+  shotKey('float', 49.5),
   {
-    time: 51,
-    position: [0.9, 2.8, -21.5],
-    target: [0.5, 1.4, -5.0],
-    fov: 55,
+    time: 53,
+    position: [0.8, 3.0, -23.2],
+    target: [0.5, 1.4, -6.0],
+    fov: 54,
   },
 ] as const;
 
