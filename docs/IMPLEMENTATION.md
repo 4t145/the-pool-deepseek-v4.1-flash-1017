@@ -153,10 +153,12 @@ generator):
 | Glaze relief | 2.2 mm |
 | Algae band | 0.3 m default, tuned 0.18–0.45 m per surface |
 
-- The texture set is generated at runtime on the 1 m world grid (8 tiles):
-  albedo, normal, roughness and AO repeat with that grid, while the height field
-  used for POM covers a single 125 mm tile and is sampled per tile; all maps are
-  produced together so the bevel/highlight line and the height field agree.
+- The texture set is generated at runtime for a single 125 mm tile (albedo,
+  normal, roughness, AO and the POM height field); the shader tiles them with
+  `world UV × 8` (1 UV unit = 1 m = 8 tiles), and per-tile variation is
+  procedural because the maps themselves only contain the profile of one tile.
+  All five maps are produced together so the bevel/highlight line and the height
+  field agree.
 - The tile shader (`applyTileShading`) is registered on every ceramic material
   through the shared shader-hook chain. It does **parallax occlusion mapping**
   on the grout/chamfer height field (12 raymarch steps at 2048², 8 at 1024²),
