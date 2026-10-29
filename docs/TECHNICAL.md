@@ -99,12 +99,15 @@ time; yaw/pitch orientation rather than an interpolated look-at point (so the
 wrap takes the short way round and a target cannot swing through the eye);
 monotone tangents at direction reversals to prevent overshoot into walls. The
 loop is C1-continuous in position and orientation; `tests/camera.test.ts`
-asserts the seam, the translation/pan rate caps, the flume clearance and that
-every composition pose is visited exactly. `CINEMATIC_DURATION` is 56 s; the
-composition beats are arrival 0 s, flume 6 s, ring 16 s, arch 21 s, tile 25.5 s,
-skylight 36.5 s, float 46.5 s, with one return key at 51 s. Segment times are
-paced against segment length so the whole take stays below 1.8 m/s peak
-translation and 13.3 deg/s peak pan (audit: `docs/evidence/camera-pacing.json`).
+asserts the seam, the translation/pan rate caps, the flume clearance, the
+owner-goal framing anchors (full flume crown/platform, wall tile + wainscot +
+basin waterline in Skin, whole red-ring rim in Still Water) and that every
+composition pose is visited exactly. `CINEMATIC_DURATION` is 56 s; the
+composition beats are arrival 0 s, flume 5 s, ring 18 s, arch 24 s, tile 32.5 s,
+skylight 41 s, float 49.5 s, with one return key at 53 s. Segment times are
+paced against segment length and the large yaw swing into the wall-side Skin
+composition, so the whole take stays below 1.87 m/s peak translation and
+14.2 deg/s peak pan (audit: `docs/evidence/camera-pacing.json`).
 The whole path is driven by the scene clock, so `renderAt(t)` stays deterministic.
 
 ## Water

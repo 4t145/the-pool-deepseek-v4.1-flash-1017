@@ -1,54 +1,48 @@
 {
-  "generator": "closed camera path sampler, 240 Hz; deterministic",
+  "generator": "closed camera path sampler, 240 Hz; deterministic; reframed Skin/Flume/Ring (owner goal revision 1)",
   "durationSeconds": 56,
   "seam": {
-    "positionDelta": 3.353e-7,
-    "velocityDelta": 0.000001474
+    "positionDelta": 4.9e-7,
+    "velocityDelta": 0.000001917
   },
   "motion": {
-    "maxSpeed": 1.784,
-    "maxSpeedAt": 32.17,
-    "maxTurnDegPerSecond": 13.29,
-    "maxTurnAt": 23.22,
-    "maxAcceleration": 0.951,
-    "minFlumeClearance": 1.26
+    "maxSpeed": 1.869,
+    "maxSpeedAt": 44.84,
+    "maxTurnDegPerSecond": 14.24,
+    "maxTurnAt": 28.24,
+    "maxAcceleration": 1.482,
+    "minFlumeClearance": 1.056
   },
   "windows": [
     {
       "start": 0,
       "end": 8,
-      "maxSpeed": 1.465,
-      "maxTurnDeg": 12.44
+      "maxSpeed": 1.285,
+      "maxTurnDeg": 12.62
     },
     {
-      "start": 18,
-      "end": 27,
-      "maxSpeed": 1.587,
-      "maxTurnDeg": 13.29
+      "start": 16,
+      "end": 25,
+      "maxSpeed": 1.737,
+      "maxTurnDeg": 8.84
     },
     {
-      "start": 36.5,
-      "end": 44.5,
-      "maxSpeed": 1.768,
-      "maxTurnDeg": 7
+      "start": 41,
+      "end": 49.5,
+      "maxSpeed": 1.869,
+      "maxTurnDeg": 8.27
     },
     {
-      "start": 38,
-      "end": 46,
-      "maxSpeed": 1.768,
-      "maxTurnDeg": 7
-    },
-    {
-      "start": 46,
+      "start": 49.5,
       "end": 54,
-      "maxSpeed": 1.213,
-      "maxTurnDeg": 5.65
+      "maxSpeed": 1.418,
+      "maxTurnDeg": 7.05
     },
     {
-      "start": 19.5,
-      "end": 27.5,
-      "maxSpeed": 1.352,
-      "maxTurnDeg": 13.29
+      "start": 24,
+      "end": 33,
+      "maxSpeed": 0.866,
+      "maxTurnDeg": 14.24
     }
   ],
   "beats": [
@@ -60,37 +54,37 @@
     },
     {
       "id": "flume",
-      "time": 6,
+      "time": 5,
       "poseError": 0,
-      "directionErrorDeg": 0
+      "directionErrorDeg": 0.000001
     },
     {
       "id": "ring",
-      "time": 16,
+      "time": 18,
       "poseError": 0,
       "directionErrorDeg": 0
     },
     {
       "id": "arch",
-      "time": 21,
+      "time": 24,
       "poseError": 0,
       "directionErrorDeg": 0
     },
     {
       "id": "skylight",
-      "time": 36.5,
+      "time": 41,
       "poseError": 0,
       "directionErrorDeg": 0
     },
     {
       "id": "tile",
-      "time": 25.5,
+      "time": 32.5,
       "poseError": 0,
       "directionErrorDeg": 0
     },
     {
       "id": "float",
-      "time": 46.5,
+      "time": 49.5,
       "poseError": 0,
       "directionErrorDeg": 0
     }
