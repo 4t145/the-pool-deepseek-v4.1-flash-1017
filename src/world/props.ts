@@ -1,5 +1,6 @@
 import {
   BackSide,
+  BoxGeometry,
   CanvasTexture,
   CatmullRomCurve3,
   Color,
@@ -325,8 +326,8 @@ function createFlumePvcMaterial(base: MeshPhysicalMaterial, grime: Texture, peel
   material.clearcoat = 1;
   material.clearcoatRoughness = 0.07;
   material.normalMap = peel;
-  material.normalScale = new Vector2(0.16, 0.16);
-  peel.repeat.set(28, 8);
+  material.normalScale = new Vector2(0.14, 0.14);
+  peel.repeat.set(86, 30);
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGrime = { value: grime };
     shader.uniforms.uWaterline = { value: LAYOUT.water.surface };
@@ -687,35 +688,50 @@ function buildRing(
   ringMesh.receiveShadow = true;
   group.add(ringMesh);
 
-  // Moulded seams along the outer and inner equators, plus the welded valve
-  // patch. Per-ring so they bob with the body.
+  // Moulded seams along the outer and inner equators, plus the rubber valve
+  // patch and cap slot. Per-ring so they bob with the body.
   const seams = new GeometryBatch();
   for (const seamRadius of [radius + tube, radius - tube]) {
-    const seam = new TorusGeometry(seamRadius, 0.0065, 6, 104);
+    const seam = new TorusGeometry(seamRadius, 0.0055, 6, 104);
     seam.rotateX(Math.PI / 2);
     seams.add(seam);
   }
+  // The valve sits on the crown of the tube (radius = ring radius), where the
+  // surface is flattest, so the patch ring and base cannot float or clip.
   const valveAngle = config.phase * 1.7 + 0.6;
-  const valveX = Math.cos(valveAngle) * radius * 0.9;
-  const valveZ = Math.sin(valveAngle) * radius * 0.9;
-  const shoulder = tube * flatten * 0.86;
-  const patch = new TorusGeometry(0.085, 0.012, 6, 28);
+  const valveX = Math.cos(valveAngle) * radius;
+  const valveZ = Math.sin(valveAngle) * radius;
+  const crown = tube * flatten;
+  const patch = new TorusGeometry(0.078, 0.014, 8, 40);
   patch.rotateX(Math.PI / 2);
-  seams.addTransformed(patch, new Vector3(valveX, shoulder - 0.006, valveZ));
+  seams.addTransformed(patch, new Vector3(valveX, crown - 0.005, valveZ));
   seams.build(
-    new MeshStandardMaterial({ name: 'vinyl.seam', color: 0x3a3128, roughness: 0.52, metalness: 0.03 }),
+    new MeshStandardMaterial({ name: 'vinyl.seam', color: 0x55504a, roughness: 0.56, metalness: 0.02 }),
     `ring.${config.id}.seams`,
     group,
   );
 
   const valves = new GeometryBatch();
-  const base = new CylinderGeometry(0.075, 0.085, 0.012, 16);
-  valves.addTransformed(base, new Vector3(valveX, shoulder, valveZ));
-  const stem = new CylinderGeometry(0.035, 0.04, 0.035, 14);
-  valves.addTransformed(stem, new Vector3(valveX, shoulder + 0.02, valveZ));
-  const cap = new CylinderGeometry(0.046, 0.046, 0.022, 16);
-  valves.addTransformed(cap, new Vector3(valveX, shoulder + 0.045, valveZ));
+  const base = new CylinderGeometry(0.058, 0.064, 0.014, 20);
+  valves.addTransformed(base, new Vector3(valveX, crown + 0.004, valveZ));
+  const stem = new CylinderGeometry(0.03, 0.034, 0.038, 16);
+  valves.addTransformed(stem, new Vector3(valveX, crown + 0.028, valveZ));
+  const cap = new CylinderGeometry(0.043, 0.043, 0.02, 20);
+  valves.addTransformed(cap, new Vector3(valveX, crown + 0.056, valveZ));
   valves.build(materials.whitePlastic.clone(), `ring.${config.id}.valve`, group);
+  // Screw slot in the cap, dark rubber so it reads as a moulded part.
+  const slotBatch = new GeometryBatch();
+  const slot = new BoxGeometry(0.042, 0.004, 0.009);
+  slotBatch.addTransformed(
+    slot,
+    new Vector3(valveX, crown + 0.067, valveZ),
+    new Quaternion().setFromAxisAngle(UP, valveAngle + 0.5),
+  );
+  slotBatch.build(
+    new MeshStandardMaterial({ name: 'vinyl.slot', color: 0x2c2926, roughness: 0.6, metalness: 0.02 }),
+    `ring.${config.id}.slot`,
+    group,
+  );
 
   group.position.set(config.position.x, 0, config.position.z);
   const initial = ringFloatPose(0, config.phase, tube, flatten);
