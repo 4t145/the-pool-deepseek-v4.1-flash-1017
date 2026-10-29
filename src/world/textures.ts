@@ -11,6 +11,7 @@ import {
 } from 'three';
 import { hash2, Rng } from '../core/rng';
 import { clamp, smoothstep } from '../core/math';
+import { TILE, profileHeight } from '../core/tileMath';
 
 export interface TileTextureSet {
   albedo: Texture;
@@ -18,11 +19,19 @@ export interface TileTextureSet {
   roughness: Texture;
   height: Texture;
   ao: Texture;
+  /** Seamless low-frequency dirt/stain field sampled in world metres. */
+  grime: Texture;
   /** World metres covered by one repeat of the set. */
   worldSize: number;
-  /** Number of tiles across one repeat. */
+  /** Number of tiles across one repeat (kept for world-UV math). */
   tiles: number;
   tileMetres: number;
+  /** POM height-map resolution in pixels per tile edge. */
+  heightSize: number;
+  /** Glaze relief converted to tile UV units, for the parallax uniform. */
+  reliefTileUnits: number;
+  /** Suggested ray-march steps for the quality tier. */
+  parallaxSteps: number;
 }
 
 interface TileOptions {
@@ -39,10 +48,10 @@ const nextFrame = (): Promise<void> =>
     else setTimeout(resolve, 0);
   });
 
-function makeCanvas(size: number): HTMLCanvasElement {
+function makeCanvas(size: number, height = size): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = size;
-  canvas.height = size;
+  canvas.height = height;
   return canvas;
 }
 
@@ -93,12 +102,51 @@ function fbm(x: number, y: number, seed: number, octaves = 3): number {
   return sum / norm;
 }
 
+const wrapIndex = (value: number, period: number): number => ((value % period) + period) % period;
+
+/** Value noise whose lattice wraps every `period` cells, so textures tile. */
+function periodicNoise(x: number, y: number, period: number, seed: number): number {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const x0 = wrapIndex(xi, period);
+  const y0 = wrapIndex(yi, period);
+  const x1 = wrapIndex(xi + 1, period);
+  const y1 = wrapIndex(yi + 1, period);
+  const a = hash2(x0, y0, seed);
+  const b = hash2(x1, y0, seed);
+  const c = hash2(x0, y1, seed);
+  const d = hash2(x1, y1, seed);
+  return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+}
+
+function periodicFbm(x: number, y: number, period: number, seed: number, octaves = 4): number {
+  let sum = 0;
+  let amp = 0.5;
+  let freq = 1;
+  let norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * periodicNoise(x * freq, y * freq, Math.max(1, Math.round(period * freq)), seed + i * 149);
+    norm += amp;
+    amp *= 0.5;
+    freq *= 2;
+  }
+  return sum / norm;
+}
+
 /**
- * The tile set is generated at runtime rather than shipped as a texture: the
- * grout recess, bevel, per-tile tilt and dirt distribution are all physical
- * values that the lightmap / POM shader can use independently.
+ * The tile set is generated at runtime rather than shipped as a texture: grout
+ * recess, chamfer and glaze relief are physical values, and the shader needs
+ * them in metres to do real parallax occlusion.
  *
- * Layout: one repeat = worldSize metres, containing `tiles` ceramic tiles.
+ * One repeat of the generated maps is **one 125 mm tile**. Per-tile colour,
+ * tilt and chipped corners are derived in the fragment shader from the tile's
+ * integer world coordinates, so the building never shows a repeating block:
+ * there is no `8×8` stamp to spot, only a repeated single-tile profile, which
+ * is what real hand-set ceramic looks like.
  */
 export function createTileTextures(renderer: WebGLRenderer, options: TileOptions = {}): TileTextureSet {
   const size = options.size ?? 2048;
@@ -106,159 +154,151 @@ export function createTileTextures(renderer: WebGLRenderer, options: TileOptions
   const worldSize = options.worldSize ?? 1;
   const seed = options.seed ?? 1337;
   const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), options.anisotropy ?? 16);
-
-  const albedoCanvas = makeCanvas(size);
-  const normalCanvas = makeCanvas(size);
-  const roughnessCanvas = makeCanvas(size);
-  const heightCanvas = makeCanvas(size);
-  const aoCanvas = makeCanvas(size);
+  const tileMetres = worldSize / tiles;
 
   const albedo = new ImageData(size, size);
   const normal = new ImageData(size, size);
-  const rough = new ImageData(size, size);
   const heightPixels = new ImageData(size, size);
+  const roughness = new ImageData(size, size);
   const ao = new ImageData(size, size);
 
-  const pitch = size / tiles;
-  // 3 mm grout on a 125 mm tile.
-  const groutHalf = 0.0125;
-  const bevel = 0.05;
+  const heights = new Float32Array(size * size);
 
-  const heightField = new Float32Array(size * size);
+  // Pixel pitch in millimetres; used to derive physically-correct normal slopes
+  // from the height field instead of guessing a normal-map strength.
+  const spacingMm = (tileMetres * 1000) / size;
+  const bevel = TILE.bevelMetres;
+  const roll = TILE.rollMetres;
+  const reliefMm = TILE.reliefMetres * 1000;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const gx = x / pitch;
-      const gy = y / pitch;
-      const col = Math.floor(gx);
-      const row = Math.floor(gy);
-      const fx = gx - col;
-      const fy = gy - row;
-
-      const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
-      const tileSeed = hash2(col, row, seed);
-      const tileSeed2 = hash2(col + 71, row + 19, seed + 5);
-
-      // The glaze sits slightly proud of the grout, with a soft chamfered edge.
-      const mask = smoothstep(groutHalf, groutHalf + bevel, edge);
-      const tilt = (tileSeed - 0.5) * 0.018 * (fx - 0.5) + (tileSeed2 - 0.5) * 0.018 * (fy - 0.5);
-      const cellLift = (tileSeed - 0.5) * 0.014;
-      const grain = (fbm(x * 0.055, y * 0.055, seed + 9, 3) - 0.5) * 0.012;
-      const micro = (hash2(x, y, seed + 3) - 0.5) * 0.0035;
-      let h = 0.16 + 0.65 * mask + cellLift * mask + tilt * mask + grain + micro;
-
-      // A rare chipped corner: lower the bevel locally and darken the grout line.
-      const chip = tileSeed2 > 0.955 && edge < 0.1 ? smoothstep(0.1, 0.02, edge) * 0.2 : 0;
-      h -= chip;
-
+      const u = (x + 0.5) / size;
+      const v = (y + 0.5) / size;
+      const edgeMm = Math.min(u, 1 - u, v, 1 - v) * tileMetres * 1000;
       const idx = y * size + x;
-      heightField[idx] = clamp(h, 0, 1);
 
-      // ---- Albedo -------------------------------------------------------
-      const broad = fbm(x * 0.012, y * 0.012, seed + 40, 2);
-      const stain = smoothstep(0.62, 0.48, broad);
-      const dirtEdge = 1 - smoothstep(groutHalf, groutHalf + 0.12, edge);
+      // ---- Height field (millimetres above the grout floor) --------------
+      const glazeMask = profileHeight(edgeMm / 1000, bevel, TILE.groutMetres, roll);
+      // Slight wave in the fired glaze, plus grout pits.
+      const warp = (periodicFbm(u * 26, v * 26, 26, seed + 11, 3) - 0.5) * 0.05;
+      const pit = (periodicFbm(u * 90, v * 90, 90, seed + 71, 3) - 0.5) * 0.05;
+      const groutFloor = (periodicFbm(u * 64, v * 64, 64, seed + 33, 3) - 0.5) * 0.04;
+      const heightMm = glazeMask * reliefMm + (warp + pit) * glazeMask + groutFloor * (1 - glazeMask);
+      heights[idx] = heightMm;
 
-      const palette = [
-        [0.913, 0.899, 0.848],
-        [0.892, 0.900, 0.878],
-        [0.868, 0.850, 0.800],
-        [0.930, 0.918, 0.876],
-        [0.838, 0.865, 0.835],
-      ] as const;
-      const base = palette[Math.floor(tileSeed * palette.length)] ?? palette[0];
-      const perTile = 0.94 + tileSeed2 * 0.11;
-      const speck = hash2(x * 3 + 17, y * 3 + 5, seed + 17);
-      const fleck = speck > 0.9965 ? -0.23 : speck < 0.002 ? 0.08 : 0;
-      const shade = perTile * (0.97 + 0.045 * broad) * (1 - 0.085 * dirtEdge) * (1 - 0.16 * stain);
+      // ---- Albedo --------------------------------------------------------
+      const mottle = periodicFbm(u * 14, v * 14, 14, seed + 5, 3);
+      const fine = periodicFbm(u * 70, v * 70, 70, seed + 9, 2);
+      // Bone glaze: warm, never pure white. #e6e0d1-ish with a little cool
+      // variation so the wall does not read as one flat cream.
+      const glazeR = 0.9 + (mottle - 0.5) * 0.055 + (fine - 0.5) * 0.02;
+      const glazeG = 0.882 + (mottle - 0.5) * 0.05 + (fine - 0.5) * 0.018;
+      const glazeB = 0.824 + (mottle - 0.5) * 0.045 + (fine - 0.5) * 0.016;
 
-      let ar = base[0] * shade + fleck;
-      let ag = base[1] * shade + fleck * 0.9;
-      let ab = base[2] * shade + fleck * 0.75;
-      if (mask < 0.32) {
-        const groutN = 0.82 + 0.36 * fbm(x * 0.14, y * 0.14, seed + 63, 2);
-        const g = 0.315 * groutN;
-        // Blend grout to tile over the chamfer so the transition is not a hard cartoon line.
-        const blend = smoothstep(0.32, 0.0, mask);
-        ar = ar * (1 - blend) + g * 1.02 * blend;
-        ag = ag * (1 - blend) + g * 0.99 * blend;
-        ab = ab * (1 - blend) + g * 0.86 * blend;
+      // Mid-grey, slightly warm grout. It must stay darker than the glaze but
+      // not read as a black drawn line: the cavity AO below does that job.
+      const groutTone = 0.47 + (periodicFbm(u * 48, v * 48, 48, seed + 63, 3) - 0.5) * 0.2;
+      const groutR = groutTone * 1.02;
+      const groutG = groutTone * 0.99;
+      const groutB = groutTone * 0.9;
+
+      // The chamfer catches dirt first: a dark line at the bottom of the
+      // bevel, lighter towards the glaze.
+      const bevelDirt = smoothstep(0.0, 0.12, glazeMask) * (1 - smoothstep(0.26, 0.62, glazeMask));
+      const dirtR = 0.52;
+      const dirtG = 0.49;
+      const dirtB = 0.42;
+
+      const mixBase = glazeMask;
+      let r = groutR + (glazeR - groutR) * mixBase;
+      let g = groutG + (glazeG - groutG) * mixBase;
+      let b = groutB + (glazeB - groutB) * mixBase;
+      r = r + (dirtR - r) * bevelDirt * 0.34;
+      g = g + (dirtG - g) * bevelDirt * 0.34;
+      b = b + (dirtB - b) * bevelDirt * 0.34;
+
+      // Sparse glaze flecks (iron spots in cheap ceramic), a handful per tile.
+      const fleck = hash2(x * 3 + 17, y * 3 + 5, seed + 17);
+      if (fleck > 0.9975) {
+        r *= 0.62;
+        g *= 0.6;
+        b *= 0.58;
+      } else if (fleck < 0.0016) {
+        r = Math.min(1, r * 1.08);
+        g = Math.min(1, g * 1.07);
+        b = Math.min(1, b * 1.06);
       }
-      // A few hairline cracks, only on the rarest tiles.
-      const crackSeed = hash2(col, row, seed + 91);
-      if (crackSeed > 0.975) {
-        const cx = hash2(col, row, seed + 12);
-        const ang = hash2(col, row, seed + 34) * Math.PI;
-        const dx = (fx - 0.25 - cx * 0.5) * Math.cos(ang) + (fy - 0.5) * Math.sin(ang);
-        const crack = Math.exp(-Math.pow(dx / 0.004, 2)) * smoothstep(0.03, 0.12, edge);
-        const dark = 1 - crack * 0.45;
-        ar *= dark;
-        ag *= dark;
-        ab *= dark;
-      }
-
-      const aoValue = 0.52 + 0.48 * smoothstep(0.0, 0.16, mask) * (0.75 + 0.25 * mask);
-      const roughness = mask > 0.5 ? 0.065 + 0.06 * broad + 0.22 * dirtEdge : 0.78 + 0.12 * broad;
 
       const o = idx * 4;
-      albedo.data[o] = Math.round(clamp(ar, 0, 1) * 255);
-      albedo.data[o + 1] = Math.round(clamp(ag, 0, 1) * 255);
-      albedo.data[o + 2] = Math.round(clamp(ab, 0, 1) * 255);
+      albedo.data[o] = Math.round(clamp(r, 0, 1) * 255);
+      albedo.data[o + 1] = Math.round(clamp(g, 0, 1) * 255);
+      albedo.data[o + 2] = Math.round(clamp(b, 0, 1) * 255);
       albedo.data[o + 3] = 255;
 
-      rough.data[o] = Math.round(clamp(roughness, 0, 1) * 255);
-      rough.data[o + 1] = Math.round(clamp(roughness, 0, 1) * 255);
-      rough.data[o + 2] = Math.round(clamp(roughness, 0, 1) * 255);
-      rough.data[o + 3] = 255;
+      // ---- Roughness / AO ------------------------------------------------
+      // Glaze is near-mirror; the grout joint and chamfer are the only rough
+      // parts, which is what makes the grout read as a groove.
+      const glazeRough = 0.05 + mottle * 0.05 + (fleck > 0.99 ? 0.08 : 0);
+      const groutRough = 0.72 + periodicFbm(u * 40, v * 40, 40, seed + 91, 2) * 0.18;
+      const roughnessValue = glazeRough + (groutRough - glazeRough) * (1 - glazeMask);
+      const roughByte = Math.round(clamp(roughnessValue, 0, 1) * 255);
+      roughness.data[o] = roughByte;
+      roughness.data[o + 1] = roughByte;
+      roughness.data[o + 2] = roughByte;
+      roughness.data[o + 3] = 255;
 
+      // Cavity AO: deepest in the grout joint, plus a soft gradient up the
+      // chamfer. This is contact darkening inside one tile, not a room bake.
+      // Contact shadow in the joint, fading up the rolled glaze edge. This is
+      // what makes the grout read as a groove at a distance even when the
+      // bevel itself is below one pixel.
+      const aoValue = 0.52 + 0.48 * smoothstep(0.0, 0.42, glazeMask) + 0.05 * bevelDirt;
       const aoByte = Math.round(clamp(aoValue, 0, 1) * 255);
       ao.data[o] = aoByte;
       ao.data[o + 1] = aoByte;
       ao.data[o + 2] = aoByte;
       ao.data[o + 3] = 255;
 
-      const hp = Math.round(clamp(h, 0, 1) * 255);
-      heightPixels.data[o] = hp;
-      heightPixels.data[o + 1] = hp;
-      heightPixels.data[o + 2] = hp;
+      const heightByte = Math.round(clamp(heightMm / reliefMm, 0, 1) * 255);
+      heightPixels.data[o] = heightByte;
+      heightPixels.data[o + 1] = heightByte;
+      heightPixels.data[o + 2] = heightByte;
       heightPixels.data[o + 3] = 255;
     }
   }
 
-  // Tangent-space normals from the height field (wrapping sample).
-  const strength = 2.4;
+  // Tangent-space normals from the metric height field. Central differences in
+  // millimetres; canvas textures flip Y, so the image row direction maps to -v.
+  const sampleHeight = (x: number, y: number): number => heights[wrapIndex(y, size) * size + wrapIndex(x, size)]!;
   for (let y = 0; y < size; y++) {
-    const ym = (y - 1 + size) % size;
-    const yp = (y + 1) % size;
     for (let x = 0; x < size; x++) {
-      const xm = (x - 1 + size) % size;
-      const xp = (x + 1) % size;
-      const dx =
-        (heightField[y * size + xp] ?? 0) -
-        (heightField[y * size + xm] ?? 0);
-      const dy =
-        (heightField[yp * size + x] ?? 0) -
-        (heightField[ym * size + x] ?? 0);
-      let nx = -dx * strength;
-      let ny = -dy * strength;
-      let nz = 1;
-      const len = Math.hypot(nx, ny, nz);
-      nx /= len;
-      ny /= len;
-      nz /= len;
+      const dhdu = (sampleHeight(x + 1, y) - sampleHeight(x - 1, y)) / (2 * spacingMm);
+      const dhdv = -(sampleHeight(x, y + 1) - sampleHeight(x, y - 1)) / (2 * spacingMm);
+      const nx = -dhdu;
+      const ny = -dhdv;
+      const nz = 1;
+      const length = Math.hypot(nx, ny, nz);
       const o = (y * size + x) * 4;
-      normal.data[o] = Math.round((nx * 0.5 + 0.5) * 255);
-      normal.data[o + 1] = Math.round((ny * 0.5 + 0.5) * 255);
-      normal.data[o + 2] = Math.round((nz * 0.5 + 0.5) * 255);
+      normal.data[o] = Math.round((nx / length) * 127.5 + 127.5);
+      normal.data[o + 1] = Math.round((ny / length) * 127.5 + 127.5);
+      normal.data[o + 2] = Math.round((nz / length) * 127.5 + 127.5);
       normal.data[o + 3] = 255;
     }
   }
 
+  const albedoCanvas = makeCanvas(size);
+  const normalCanvas = makeCanvas(size);
+  const roughnessCanvas = makeCanvas(size);
+  const heightCanvas = makeCanvas(size);
+  const aoCanvas = makeCanvas(size);
   albedoCanvas.getContext('2d')?.putImageData(albedo, 0, 0);
   normalCanvas.getContext('2d')?.putImageData(normal, 0, 0);
-  roughnessCanvas.getContext('2d')?.putImageData(rough, 0, 0);
+  roughnessCanvas.getContext('2d')?.putImageData(roughness, 0, 0);
   heightCanvas.getContext('2d')?.putImageData(heightPixels, 0, 0);
   aoCanvas.getContext('2d')?.putImageData(ao, 0, 0);
+
+  const grime = createGrimeTexture(renderer, 512, seed + 401, maxAniso);
 
   return {
     albedo: canvasTexture(albedoCanvas, true, maxAniso),
@@ -266,10 +306,44 @@ export function createTileTextures(renderer: WebGLRenderer, options: TileOptions
     roughness: canvasTexture(roughnessCanvas, false, maxAniso),
     height: canvasTexture(heightCanvas, false, maxAniso),
     ao: canvasTexture(aoCanvas, false, maxAniso),
+    grime,
     worldSize,
     tiles,
-    tileMetres: worldSize / tiles,
+    tileMetres,
+    heightSize: size,
+    reliefTileUnits: TILE.reliefMetres / tileMetres,
+    parallaxSteps: size >= 2048 ? 12 : 8,
   };
+}
+
+/**
+ * Seamless multi-octave dirt field. One repeat covers a few metres, sampled in
+ * world metres by the tile shader for drip streaks, blotching and algae drift.
+ */
+export function createGrimeTexture(renderer: WebGLRenderer, size = 512, seed = 77, anisotropy = 8): Texture {
+  const canvas = makeCanvas(size);
+  const image = new ImageData(size, size);
+  const coarsePeriod = 6;
+  const finePeriod = 24;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+      const coarse = periodicFbm(u * coarsePeriod, v * coarsePeriod, coarsePeriod, seed, 4);
+      const fine = periodicFbm(u * finePeriod, v * finePeriod, finePeriod, seed + 37, 3);
+      const value = clamp(coarse * 0.72 + fine * 0.28, 0, 1);
+      const o = (y * size + x) * 4;
+      const byte = Math.round(value * 255);
+      image.data[o] = byte;
+      image.data[o + 1] = byte;
+      image.data[o + 2] = byte;
+      image.data[o + 3] = 255;
+    }
+  }
+  canvas.getContext('2d')?.putImageData(image, 0, 0);
+  const texture = canvasTexture(canvas, false, Math.min(renderer.capabilities.getMaxAnisotropy(), anisotropy));
+  texture.name = 'tile.grime';
+  return texture;
 }
 
 /** Tileable normal map for the water surface. Two layers are scrolled in the shader. */
