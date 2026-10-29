@@ -292,11 +292,32 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
 
   const black = new MeshBasicMaterial({ name: 'void', color: 0x000000 });
 
-  const poolTileBand = new MeshStandardMaterial({
-    name: 'pool-band',
-    color: 0x1e514b,
-    roughness: 0.45,
-    metalness: 0.02,
+  // The lane band at the waterline: glazed teal tile, same ceramic system as
+  // the rest of the room so it does not read as a flat painted stripe next to
+  // the wainscot. Its algae band sits at the band's lower edge (y ≈ 0.10), the
+  // waterline as seen from this side.
+  const poolTileBand = configure(
+    new MeshStandardMaterial({
+      name: 'pool-band',
+      map: tiles.albedo,
+      normalMap: tiles.normal,
+      roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
+      color: 0x1e514b,
+      roughness: 1,
+      metalness: 0.02,
+    }),
+  );
+  poolTileBand.normalScale.set(1, 1);
+  applyTileShading(poolTileBand, tiles, {
+    grime: 0.85,
+    algae: 0.9,
+    algaeWidth: 0.09,
+    waterlineY: 0.13,
+    tintAmount: 0.1,
+    tiltAmount: 0.055,
+    parallax: true,
   });
 
   // Planar architecture must cast and receive from both faces: the sun sits
