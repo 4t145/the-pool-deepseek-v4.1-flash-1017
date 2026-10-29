@@ -109,15 +109,50 @@ The whole path is driven by the scene clock, so `renderAt(t)` stays deterministi
 
 ## Water
 
-Current baseline: half-res planar reflection with oblique clipping, two scrolling
-normal maps, Fresnel mix, sun specular, edge foam, fog. Transparent, no depth
-write.
+Implemented in `src/world/water.ts`; the optics maths lives in
+`src/core/waterOptics.ts` and is covered by `tests/water-optics.test.ts`. Per
+frame, before the main pass, two reduced-resolution scene renders run with the
+water mesh hidden:
 
-Target: real refraction/absorption of the underwater scene (scene color + depth),
-depth-aware soft intersection, contact foam and ring wakes, caustics on submerged
-surfaces, micro-roughness widening reflection blur with distance. Keep the
-reflection camera mathematically correct when the main camera rolls (cinematic
-roll is small but present).
+1. **Planar reflection** — mirrored camera with oblique near-plane clipping at
+   `y = 0`, half-float target at `quality.reflectionScale` (0.8 ultra / 0.3 low).
+   The surface samples it projectively with five fixed taps whose radius grows
+   with distance (micro-roughness), so the mirror is sharp near and slightly soft
+   far; the taps are fixed, not jittered, so the reflection is temporally stable.
+2. **Refraction source** — an opaque scene copy drawn with a wider (1.9×, clamped
+   to 118°) FOV camera and a global clip plane that removes everything above
+   `y = 0`. The wide frustum is what makes the refraction geometric: Snell bends
+   near-field rays below the main frame, so the underwater point a bottom-of-frame
+   pixel sees is outside the main view. The water shader reconstructs the
+   refracted ray (`refract`, η = 1/1.333), intersects the basin AABB analytically
+   for the hit point and path length, projects that point with the wide camera's
+   view-projection, then applies Beer–Lambert transmittance `exp(-σ · path)` plus
+   an in-scatter colour. No depth texture is involved, so there is no depth-edge
+   stair-stepping through the ripples.
+
+- Surface detail: three scrolling tileable normal layers at different scales and
+  speeds, plus analytic wakes. `wakeSlope` is the exact radial derivative of the
+  ring/flume height profile in `waterOptics` (fixed per-source constants, no
+  randomness), so ripples stay low amplitude and stable.
+- Foam: a thin coping/scum band from the basin edge distance, contact rings around
+  each floating ring (`LAYOUT.rings` radius/tube), a patch at the flume mouth
+  (`LAYOUT.slide.end` / `mouthRadius`), and a few drifting flecks from the noise
+  texture — no white cartoon suds.
+- Caustics: `buildUnderwaterCaustics()` patches `tileUnderwater`, `tileFloor`,
+  `poolTileBand`, the red PVC and the flume's cloned PVC/liner through the shared
+  `addShaderHook` convention. The pattern is analytic (`causticLattice`: three
+  crossing wave trains, bright web where two cancel), world-space, clock-driven,
+  masked below `y = 0` and softened with depth. The water shader adds the same
+  lattice at full resolution on the refracted hit point, so the web stays crisp
+  despite the reduced-resolution source.
+- Fresnel is Schlick with F0 = 0.02. The reflection is pulled 22 % toward the deep
+  body colour and multiplied by 0.92 so the water reads as water rather than a
+  perfect dielectric mirror; fog matches the scene `FogExp2`.
+- The mesh is transparent with `depthWrite = false`, alpha 1; above-water geometry
+  that pierces the surface still depth-tests in front of it. A camera below the
+  surface falls back to the deep colour.
+- Deterministic: every visual term is a function of the scene clock and textures
+  are generated from fixed seeds; `pnpm determinism` is pixel-identical.
 
 ## Lighting / bake
 
@@ -169,7 +204,12 @@ portable via `CHROME_BIN`.
 
 - Tile texture repeats every 1 m and its broad stains are not seamless; POM is
   not wired yet; grout/normal contrast is too strong at distance.
-- Water is mostly mirror + tint; no refraction, no caustics, no ring wakes.
+- Water: the absorption path is solved against the analytic basin box, so
+  submerged props/steps use the floor's path length instead of their own (minor
+  at current amplitudes); the refraction source is 0.68× of the drawing buffer
+  through a 1.9× FOV, so underwater detail is slightly softer than the main
+  image; ring wakes read in the reflection more than in the body colour by
+  design.
 - Ceiling/upper walls read as flat dark because the room has no baked bounce.
 - Skylight/window emissives are too hot; bloom threshold needs a re-tune after
   materials settle.
