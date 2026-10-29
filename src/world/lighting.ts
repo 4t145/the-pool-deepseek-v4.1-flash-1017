@@ -172,11 +172,13 @@ export function buildLighting(options: LightingOptions): Lighting {
   RectAreaLightUniformsLib.init();
 
   // A darker, cooler haze keeps depth without bleaching the warm far arch.
-  scene.fog = new FogExp2(new Color(0x74898d), 0.0088);
+  // Deeper, cooler haze: the hall has to read with depth, and the warm arch
+  // must separate from the cold room instead of being washed toward pale grey.
+  scene.fog = new FogExp2(new Color(0x46575a), 0.0105);
   scene.background = new Color(0x060b0c);
 
   // Residual fill only: the probe grid owns the real bounce.
-  const hemisphere = new HemisphereLight(0xd6e6e8, 0x1b2724, 0.14);
+  const hemisphere = new HemisphereLight(0xd6e6e8, 0x1b2724, 0.1);
   scene.add(hemisphere);
 
   // The sun is deliberately a little oblique: long soft bars of light rather
@@ -204,7 +206,7 @@ export function buildLighting(options: LightingOptions): Lighting {
   // The skylight still needs an analytic light for a soft specular sheen on the
   // water and the glaze; its diffuse contribution now comes from the bake, so it
   // is kept low to avoid double counting.
-  const skylight = new RectAreaLight(0xd9e8ef, 0.85, 3.7, 44);
+  const skylight = new RectAreaLight(0xd9e8ef, 0.7, 3.7, 44);
   skylight.position.set(0, 8.9, 2.5);
   skylight.rotation.x = Math.PI / 2;
   scene.add(skylight);
@@ -268,7 +270,7 @@ export function buildLighting(options: LightingOptions): Lighting {
       seed: 0x51ff,
     });
     scene.add(probes.volume);
-    applyIblResponse(scene, environment, 0.8, 0.42, 0.8);
+    applyIblResponse(scene, environment, 0.68, 0.42, 0.8);
     const stats = probes.stats;
     console.info(
       `[pool] probe bake: ${stats.probes} probes ${stats.gridDims.join('x')}, N=${stats.samplesPerProbe}, ` +
