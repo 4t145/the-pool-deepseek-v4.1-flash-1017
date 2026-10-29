@@ -57,3 +57,21 @@ quality=ultra, capture mode, arrival shot at scene time t=2.
      warmed. docs/evidence/lighting-arch-amber-1080.jpg shows the amber depth.
    - "Sun bar still a cut edge": shadow radius 5.5 -> 8.0 (r186 PCF penumbra);
      the arch still shows the same diagonal, now with a gradual edge.
+
+6. IBL double-count repair (w4 finding 890302d7, fixed here)
+   three r186 WebGLRenderer.setProgram line ~2738 overwrites the envMapIntensity
+   uniform with scene.environmentIntensity whenever material.envMap === null and
+   scene.environment is set, and refreshUniformsStandard/Physical only read
+   material.envMapIntensity when material.envMap is truthy. The first version of
+   applyIblResponse therefore scaled a value the renderer ignored: a silent no-op
+   and a real diffuse double count with the probe grid.
+   Fix: pin scene.environment onto each standard/physical material
+   (material.envMap = environment) before setting the intensity, then set
+     metal:               0.8  (= scene.environmentIntensity, current look kept)
+     clearcoat dielectric: 0.8 * 0.8  = 0.64
+     matte dielectric:     0.8 * 0.42 = 0.336
+   Verified in-page: 339/339 standard materials have envMap assigned; intensity
+   set is {0.336, 0.64, 0.8}. A/B vs the old (ignored-intensity) behavior on the
+   same session: mean display YAVG 107.895 fixed vs 111.054 old, i.e. the frame
+   is ~3 % darker overall, with the tile clearcoat IBL cut 20 % and matte walls
+   58 %. Side-by-side committed as docs/evidence/lighting-ibl-fix-720.jpg.
