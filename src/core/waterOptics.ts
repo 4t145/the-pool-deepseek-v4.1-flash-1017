@@ -158,7 +158,7 @@ export function wakeSlope(distance: number, time: number, phase: number, config:
  */
 export function causticLattice(x: number, z: number, time: number, depth: number): number {
   // WATER_CAUSTIC_SCALE
-  const base = 5.2;
+  const base = 26.0;
   const d1x = 0.8202;
   const d1z = 0.5721;
   const d2x = -0.4550;
@@ -170,8 +170,8 @@ export function causticLattice(x: number, z: number, time: number, depth: number
   const c = Math.sin((x * d3x + z * d3z) * (base * 1.37) + time * 0.7 + 3.1);
   const web = Math.min(Math.abs(a + b), Math.abs(a + c));
   const depthFactor = Math.min(1, Math.max(0, depth / 3.2));
-  const sharp = 11.5 + (4.5 - 11.5) * depthFactor;
-  return Math.pow(Math.min(1, Math.max(0, 1 - web * 0.92)), sharp);
+  const sharp = 10.0 + (5.0 - 10.0) * depthFactor;
+  return Math.pow(Math.min(1, Math.max(0, 1 - web * 0.85)), sharp);
 }
 
 /** Cone-of-influence test for the water simulation: is a point inside the basin footprint? */

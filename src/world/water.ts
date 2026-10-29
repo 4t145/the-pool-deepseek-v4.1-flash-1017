@@ -47,16 +47,12 @@ export interface UnderwaterCaustics {
  * The caustic pattern is evaluated procedurally in world space (no texture, no
  * repeat) by three crossing wave trains; the bright web is where they cancel.
  * Mirrors `causticLattice` in `src/core/waterOptics.ts` — keep constants in sync.
+ * Shared by the underwater material patch and the water surface overlay so the
+ * two cannot drift.
  */
-const CAUSTIC_GLSL = /* glsl */ `
-  varying vec3 vPoolCausticWorld;
-  varying vec3 vPoolCausticNormal;
-  uniform float uCausticTime;
-  uniform float uCausticStrength;
-  uniform float uCausticScale;
-
+const CAUSTIC_LATTICE_GLSL = /* glsl */ `
   float poolCausticLattice(vec2 p, float t, float depth) {
-    float base = 5.2;
+    float base = 26.0;
     vec2 d1 = vec2(0.8202, 0.5721);
     vec2 d2 = vec2(-0.4550, 0.8905);
     vec2 d3 = vec2(0.3417, -0.9398);
@@ -65,10 +61,19 @@ const CAUSTIC_GLSL = /* glsl */ `
     float c = sin(dot(p, d3) * (base * 1.37) + t * 0.7 + 3.1);
     float web = min(abs(a + b), abs(a + c));
     float depthFactor = clamp(depth / 3.2, 0.0, 1.0);
-    float sharp = mix(11.5, 4.5, depthFactor);
-    return pow(clamp(1.0 - web * 0.92, 0.0, 1.0), sharp);
+    float sharp = mix(10.0, 5.0, depthFactor);
+    return pow(clamp(1.0 - web * 0.85, 0.0, 1.0), sharp);
   }
 `;
+
+const CAUSTIC_GLSL =
+  /* glsl */ `
+  varying vec3 vPoolCausticWorld;
+  varying vec3 vPoolCausticNormal;
+  uniform float uCausticTime;
+  uniform float uCausticStrength;
+  uniform float uCausticScale;
+` + CAUSTIC_LATTICE_GLSL;
 
 type HookedMaterial = Material & {
   userData: Record<string, unknown> & {
@@ -174,6 +179,11 @@ const FRAGMENT = /* glsl */ `
   precision highp float;
 
   #define RING_COUNT 3
+
+  ${CAUSTIC_LATTICE_GLSL}
+
+  uniform vec3 uCausticColor;
+  uniform float uCausticStrength;
 
   uniform sampler2D uReflection;
   uniform sampler2D uScene;
@@ -338,6 +348,15 @@ const FRAGMENT = /* glsl */ `
     }
     vec3 transmittance = exp(-uAbsorption * pathLength);
     vec3 refracted = transmitted * transmittance + uScatterColor * (1.0 - transmittance);
+
+    // Crisp caustic web on the submerged surface. The material-level caustics are
+    // already in the refract source but they are low-pass filtered by the
+    // reduced-resolution prepass; this adds the sharp lines back at full
+    // resolution, absorbed by the same water column.
+    float hitDepth = clamp(-hit.y, 0.0, 3.4);
+    float caustic = poolCausticLattice(hit.xz, uTime, hitDepth);
+    refracted += uCausticColor * caustic * transmittance * uCausticStrength;
+
     refracted = mix(uDeepColor, refracted, uRefractionOn);
 
     // ---- Planar reflection ----------------------------------------------
@@ -515,6 +534,8 @@ export function buildWater(
         value: new Vector4(LAYOUT.slide.end.x, LAYOUT.slide.end.z, LAYOUT.slide.tubeRadius, 0.9),
       },
       uRefractionOn: { value: 1 },
+      uCausticColor: { value: new Color(0xffe9c9).multiplyScalar(0.5) },
+      uCausticStrength: { value: 1 },
       uReflectionStrength: { value: 1 },
       uFoamStrength: { value: 1 },
       uDistortion: { value: 0.018 },
@@ -572,6 +593,9 @@ export function buildWater(
     mesh.visible = true;
   };
 
+  /** Keeps only underwater geometry in the refraction source (see renderRefraction). */
+  const refractionClipPlane = new Plane(new Vector3(0, -1, 0), -0.004);
+
   const water: WaterSystem = {
     mesh,
     material,
@@ -584,7 +608,13 @@ export function buildWater(
       if (activeCamera.position.y < 0.02) return;
       activeCamera.updateMatrixWorld();
       syncRefractionCamera(activeCamera);
+      // Clip everything above the water plane. Without this, above-water props
+      // (ladders, deck, rings) that happen to project onto the submerged point
+      // would leak into the refracted image as bright, unabsorbed silhouettes.
+      const previousClipping = activeRenderer.clippingPlanes;
+      activeRenderer.clippingPlanes = [refractionClipPlane];
       renderPass(activeRenderer, activeScene, refractionCamera, refractionTarget);
+      activeRenderer.clippingPlanes = previousClipping;
     },
     renderReflection(activeRenderer, activeScene, activeCamera) {
       activeCamera.updateMatrixWorld();
