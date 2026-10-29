@@ -75,11 +75,23 @@ let failures = 0;
 async function captureOnce(caseDef, runLabel) {
   const browser = await launchBrowser();
   try {
-    const { page, context, errors } = await openScene(browser, url, {
-      width: caseDef.width,
-      height: caseDef.height,
-      params: caseDef.params,
-    });
+    // Boot can time out when peers are rendering on the same host: retry a
+    // fresh page instead of failing the evidence run.
+    let scene = null;
+    for (let attempt = 1; attempt <= 3 && !scene; attempt++) {
+      try {
+        scene = await openScene(browser, url, {
+          width: caseDef.width,
+          height: caseDef.height,
+          params: caseDef.params,
+        });
+      } catch (error) {
+        console.warn(`[determinism] ${caseDef.id} boot attempt ${attempt}/3 failed: ${error.message}`);
+        await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+      }
+    }
+    if (!scene) throw new Error(`${caseDef.id}: page never reached __POOL_READY__`);
+    const { page, context, errors } = scene;
     await prepareCapture(page, { letterbox: false });
     await renderAt(page, caseDef.time, { frames: 0 });
     const transforms = await readTransforms(page);

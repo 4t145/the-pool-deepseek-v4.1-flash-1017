@@ -134,8 +134,8 @@ export async function navigate(page, url, params = {}) {
   await page.goto(`${url}${suffix ? `?${suffix}` : ''}`, { waitUntil: 'domcontentloaded' });
 }
 
-export async function waitForReady(page) {
-  await page.waitForFunction(() => window.__POOL_READY__ === true, undefined, { timeout: 180_000 });
+export async function waitForReady(page, { timeout = 150_000 } = {}) {
+  await page.waitForFunction(() => window.__POOL_READY__ === true, undefined, { timeout });
 }
 
 /**
@@ -182,6 +182,35 @@ export async function cinematicAt(page, time, { frames = 2 } = {}) {
 
 export async function readStats(page) {
   return page.evaluate(() => window.__pool?.getStats() ?? null);
+}
+
+/**
+ * Fail-safe shot assertion. A navigation/capture race can leave the page in a
+ * different camera mode than requested (seen once during review captures), so
+ * every positioned capture snaps the requested shot and verifies the app state
+ * before a frame is taken. Retries a couple of times, then throws.
+ */
+export async function ensureShot(page, id) {
+  let last = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.evaluate((shotId) => {
+      window.__pool?.setShot(shotId);
+    }, id);
+    const stats = await readStats(page);
+    last = stats;
+    if (stats && stats.mode === 'shot' && stats.shot === id) return { stats, attempts: attempt };
+    await page.waitForTimeout(120);
+  }
+  throw new Error(`capture is not in shot mode for "${id}" (got mode=${last?.mode ?? '?'} shot=${last?.shot ?? '?'})`);
+}
+
+/** Fail-safe cinematic assertion for frame-stepped takes. */
+export async function ensureCinematic(page) {
+  const stats = await readStats(page);
+  if (!stats || stats.mode !== 'cinematic') {
+    throw new Error(`trailer capture is not in cinematic mode (got mode=${stats?.mode ?? '?'})`);
+  }
+  return stats;
 }
 
 /** Read the transform of every renderable object, for determinism evidence. */
@@ -262,4 +291,46 @@ export const totalErrors = (errors) => errors.filter((error) => !/favicon/i.test
 export function formatStats(stats) {
   if (!stats) return '(no stats)';
   return `${stats.drawCalls} calls · ${(stats.triangles / 1000).toFixed(1)}k tri · ${stats.fps.toFixed(1)} fps · ${stats.mode}/${stats.shot}`;
+}
+
+/**
+ * Self-healing positioned still: open a fresh scene, assert the requested shot,
+ * render the exact scene time, capture the drawing buffer. Boot and capture are
+ * retried with a fresh page because a saturated host (many peers capturing at
+ * once) can blow the __POOL_READY__ wait; a retry must never silently ship the
+ * wrong camera pose (that is what ensureShot is for).
+ */
+export async function captureStill(
+  browser,
+  url,
+  { width, height, params, shotId, time, target, letterbox = false, format = 'png', attempts = 3 },
+) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let scene = null;
+    try {
+      scene = await openScene(browser, url, { width, height, params });
+      await prepareCapture(scene.page, { letterbox });
+      const state = await ensureShot(scene.page, shotId);
+      await renderAt(scene.page, time, { frames: 0 });
+      const stats = await readStats(scene.page);
+      const verified = stats?.mode === 'shot' && stats.shot === shotId;
+      if (!verified) throw new Error(`camera is not on "${shotId}" (mode=${stats?.mode ?? '?'} shot=${stats?.shot ?? '?'})`);
+      await captureCanvas(scene.page, target, { format });
+      return {
+        stats,
+        verified,
+        shotAttempts: state.attempts,
+        bootAttempt: attempt,
+        errors: totalErrors(scene.errors),
+      };
+    } catch (error) {
+      lastError = error;
+      console.warn(`[bench] ${shotId} capture attempt ${attempt}/${attempts} failed: ${error.message}`);
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    } finally {
+      await scene?.context.close().catch(() => {});
+    }
+  }
+  throw lastError ?? new Error(`failed to capture ${shotId}`);
 }

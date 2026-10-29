@@ -23,9 +23,11 @@ import {
   prepareCapture,
   captureCanvas,
   renderAt,
+  ensureCinematic,
   startServer,
   totalErrors,
 } from './lib/bench.mjs';
+import { CINEMATIC_DURATION } from '../src/world/layout.ts';
 import {
   buildTrailerPlan,
   buildXfadeFilter,
@@ -66,9 +68,10 @@ if (requestedSeconds !== null) {
   segments = baseSegments.map((segment) => ({ start: segment.start, duration }));
 }
 
-// The guided take length lives in src/world/layout.ts (CINEMATIC_DURATION).
-// Pass --take=<seconds> to bound-check the chosen windows against it.
-const takeSeconds = args.number('take', null);
+// The guided take length is authoritative in src/world/layout.ts; Node 24 strips
+// the types on import, so the trailer windows are always bound-checked against
+// the real CINEMATIC_DURATION instead of a duplicated constant.
+const takeSeconds = args.number('take', CINEMATIC_DURATION);
 const plan = buildTrailerPlan({ segments, fps, width, height, crossfade, cinematicDuration: takeSeconds });
 const validation = validateTrailerPlan(plan);
 if (!allowShort && !validation.ok) throw new Error(`Trailer plan rejected: ${validation.problems.join('; ')}`);
@@ -181,12 +184,25 @@ const browser = await launchBrowser();
 let failures = 0;
 
 try {
-  const { page, context, errors } = await openScene(browser, url, {
-    width,
-    height,
-    params: { capture: 1, quality, t: 0, hud: 0, letterbox: 1 },
-  });
+  // Boot can be slow when several peers are rendering: retry the page instead
+  // of failing a long capture run.
+  let scene = null;
+  for (let attempt = 1; attempt <= 3 && !scene; attempt++) {
+    try {
+      scene = await openScene(browser, url, {
+        width,
+        height,
+        params: { capture: 1, quality, t: 0, hud: 0, letterbox: 1 },
+      });
+    } catch (error) {
+      console.warn(`[trailer] boot attempt /3 failed: `);
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    }
+  }
+  if (!scene) throw new Error('trailer page never reached __POOL_READY__');
+  const { page, context, errors } = scene;
   await prepareCapture(page, { letterbox: true });
+  await ensureCinematic(page);
 
   const started = Date.now();
   let renderedFrames = 0;
@@ -241,6 +257,8 @@ try {
       frameFormat,
       totalSeconds: plan.totalSeconds,
       totalFrames: plan.totalFrames,
+      // 2.39:1 bars burned in by PostPipeline (138 px top and bottom at 1080p).
+      letterboxBarsPx: Math.max(0, Math.round(((1 - plan.width / plan.height / 2.39) / 2) * plan.height)),
       segments: plan.segments.map((segment) => ({ start: segment.start, duration: segment.duration, frames: segment.frameCount })),
       xfade: filter,
     },

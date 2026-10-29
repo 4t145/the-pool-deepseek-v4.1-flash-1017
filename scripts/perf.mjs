@@ -15,7 +15,6 @@ import {
   SHOT_TIMES,
   closeServer,
   createArgReader,
-  formatStats,
   launchBrowser,
   openScene,
   prepareCapture,
@@ -49,12 +48,14 @@ const report = { generatedAt: new Date().toISOString().slice(0, 10), primary: nu
 let failures = 0;
 
 try {
+  const loadStarted = Date.now();
   const scene = await openScene(browser, url, {
     width,
     height,
     params: { shot, capture: 1, quality, t: SHOT_TIMES[shot] ?? 2.4, hud: 0, letterbox: 0 },
   });
   const page = scene.page;
+  const loadMs = Date.now() - loadStarted;
   await prepareCapture(page, { letterbox: false });
   await renderAt(page, SHOT_TIMES[shot] ?? 2.4);
 
@@ -91,6 +92,7 @@ try {
     height,
     quality,
     shot,
+    loadMs,
     sampleSeconds: seconds,
     frames: frames.length,
     fps: Number(fps.toFixed(2)),
@@ -108,6 +110,7 @@ try {
   report.primary = metrics;
 
   console.log(`[perf] ${width}x${height} ${quality} · shot=${shot}`);
+  console.log(`[perf] load to __POOL_READY__ ${loadMs} ms`);
   console.log(`[perf] ${metrics.frames} frames · ${metrics.fps.toFixed(1)} fps avg · p50 ${metrics.frameMs.p50} ms · p95 ${metrics.frameMs.p95} ms · max ${metrics.frameMs.max} ms`);
   console.log(`[perf] ${metrics.drawCalls} draw calls · ${metrics.triangles} triangles`);
   console.log(`[perf] frames over ${frameBudgetMs.toFixed(1)} ms (45 fps) after warmup: ${overBudget}`);
@@ -121,6 +124,7 @@ try {
   await scene.context.close();
 
   if (!skipLow) {
+    const lowLoadStarted = Date.now();
     const low = await openScene(browser, url, {
       width: 1280,
       height: 720,
@@ -130,8 +134,11 @@ try {
     await renderAt(low.page, 2);
     const lowStats = await readStats(low.page);
     const lowOk = Boolean(lowStats && lowStats.triangles > 0);
-    report.low = { width: 1280, height: 720, quality: 'low', booted: lowOk, stats: lowStats };
-    console.log(`[perf] low preset 1280x720 boot: ${lowOk ? 'PASS' : 'FAIL'} · ${formatStats(lowStats)}`);
+    const lowLoadMs = Date.now() - lowLoadStarted;
+    report.low = { width: 1280, height: 720, quality: 'low', booted: lowOk, loadMs: lowLoadMs, stats: lowStats };
+    console.log(
+      `[perf] low preset 1280x720 boot: ${lowOk ? 'PASS' : 'FAIL'} · ${lowLoadMs} ms · ${lowStats?.drawCalls ?? 0} calls · ${((lowStats?.triangles ?? 0) / 1000).toFixed(1)}k tri`,
+    );
     if (!lowOk) problems.push('low preset failed to boot at 1280x720');
     if (totalErrors(low.errors).length > 0) problems.push(`${totalErrors(low.errors).length} browser error(s) on low preset`);
     await low.context.close();

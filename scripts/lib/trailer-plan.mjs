@@ -13,9 +13,14 @@ export const TRAILER_DEFAULTS = Object.freeze({
   height: 1080,
   fps: 24,
   crossfade: 0.6,
+  // Guided-take windows (see docs/evidence/camera-pacing.json), chosen from
+  // measured speeds on the retimed take: establishing flume pass (max 1.28 m/s),
+  // the calm arch->tile water stretch (0.54 m/s), then ascension into the
+  // skylight (1.59 m/s). 8 s each with 0.6 s dissolves = 22.8 s, inside the
+  // 20-30 s acceptance window and below the 1.6 m/s slow-move warning.
   segments: [
     { start: 0.0, duration: 8.0 },
-    { start: 14.0, duration: 8.0 },
+    { start: 23.5, duration: 8.0 },
     { start: 33.0, duration: 8.0 },
   ],
 });

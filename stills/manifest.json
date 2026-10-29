@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-10-29",
+  "quality": "ultra",
+  "shots": [
+    {
+      "id": "arrival",
+      "time": 2.4,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "91d96d4d51cbce3803d1893e96b7acc485c24857a5b21d71776bdcab93ea058c",
+      "stats": {
+        "fps": 0,
+        "frame": 6,
+        "mode": "shot",
+        "shot": "arrival",
+        "drawCalls": 355,
+        "triangles": 96054
+      }
+    },
+    {
+      "id": "flume",
+      "time": 6.5,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "91cd998fd380b7c5ce2b8db35bf97234b17dc610c1c5ddf6a1c5283a8c0998d8",
+      "stats": {
+        "fps": 0,
+        "frame": 7,
+        "mode": "shot",
+        "shot": "flume",
+        "drawCalls": 223,
+        "triangles": 94352
+      }
+    },
+    {
+      "id": "ring",
+      "time": 11.2,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 2,
+      "sha256": "0005841909b5ed88543c51d8eaa57a8250489876d16f8582ffbb6684926a339d",
+      "stats": {
+        "fps": 0,
+        "frame": 6,
+        "mode": "shot",
+        "shot": "ring",
+        "drawCalls": 103,
+        "triangles": 57156
+      }
+    },
+    {
+      "id": "arch",
+      "time": 18.6,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "9ec11294247a7055c244b823c93bad0fa2357f55d8b5f2ec64e59a196b996688",
+      "stats": {
+        "fps": 0,
+        "frame": 6,
+        "mode": "shot",
+        "shot": "arch",
+        "drawCalls": 172,
+        "triangles": 53086
+      }
+    },
+    {
+      "id": "skylight",
+      "time": 24.3,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "87ea8b5d77bb11fb5a3b353264a874a275900b3d79b8c8c46936dba203f68109",
+      "stats": {
+        "fps": 0,
+        "frame": 6,
+        "mode": "shot",
+        "shot": "skylight",
+        "drawCalls": 284,
+        "triangles": 63858
+      }
+    },
+    {
+      "id": "tile",
+      "time": 30.8,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "116f7e563997bdf2f8c91e84703c34d09df1bbbc99a76ce3641a8a6cf2297746",
+      "stats": {
+        "fps": 0,
+        "frame": 5,
+        "mode": "shot",
+        "shot": "tile",
+        "drawCalls": 53,
+        "triangles": 45388
+      }
+    },
+    {
+      "id": "float",
+      "time": 38.4,
+      "width": 1920,
+      "height": 1080,
+      "quality": "ultra",
+      "verified": true,
+      "shotAttempts": 1,
+      "bootAttempt": 1,
+      "sha256": "940fdee440160df07fd73a1de4a637a46d197c64344beaba72acf2b02605df39",
+      "stats": {
+        "fps": 0,
+        "frame": 5,
+        "mode": "shot",
+        "shot": "float",
+        "drawCalls": 342,
+        "triangles": 95958
+      }
+    }
+  ],
+  "hero": {
+    "id": "arrival",
+    "time": 2.4,
+    "width": 3840,
+    "height": 2160,
+    "quality": "ultra",
+    "verified": true,
+    "shotAttempts": 1,
+    "bootAttempt": 1,
+    "sha256": "f98d27460464a4e54641e03638d8f2e1be8c9ad8851bd7b8d0af4f062d2d622b",
+    "stats": {
+      "fps": 0,
+      "frame": 6,
+      "mode": "shot",
+      "shot": "arrival",
+      "drawCalls": 355,
+      "triangles": 96054
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-10-29",
+  "file": "stills/trailer.mp4",
+  "sha256": "d259595685fef015028603aaebf6ae70333ab60fe38963ef426e5f463b32f167",
+  "bytes": 21677709,
+  "plan": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 24,
+    "crossfade": 0.6,
+    "frameFormat": "jpeg",
+    "totalSeconds": 22.8,
+    "totalFrames": 576,
+    "letterboxBarsPx": 138,
+    "segments": [
+      {
+        "start": 0,
+        "duration": 8,
+        "frames": 192
+      },
+      {
+        "start": 23.5,
+        "duration": 8,
+        "frames": 192
+      },
+      {
+        "start": 33,
+        "duration": 8,
+        "frames": 192
+      }
+    ],
+    "xfade": "[0:v][1:v]xfade=transition=fade:duration=0.600:offset=7.400[x1];[x1][2:v]xfade=transition=fade:duration=0.600:offset=14.800[v]"
+  },
+  "ffprobe": {
+    "codec": "h264",
+    "width": 1920,
+    "height": 1080,
+    "rFrameRate": "24/1",
+    "frames": 548,
+    "pixelFormat": "yuv420p",
+    "duration": 22.833333
+  }
+}
