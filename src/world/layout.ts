@@ -91,6 +91,8 @@ export const LAYOUT = {
     mouthDirection: new Vector3(-0.95, -0.12, -0.28).normalize(),
     /** Mouth opening radius, for foam/wake anchoring. */
     mouthRadius: 0.86,
+    /** World height of the waterline the flume is stained at. */
+    waterlineY: 0,
   },
   rings: [
     { id: 'yellow', color: 0xe8b21b, position: new Vector3(-2.15, 0.045, -7.6), radius: 0.56, tube: 0.16, phase: 0.0 },

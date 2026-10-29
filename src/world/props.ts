@@ -2,7 +2,6 @@ import {
   BackSide,
   CanvasTexture,
   CatmullRomCurve3,
-  CircleGeometry,
   Color,
   CylinderGeometry,
   FrontSide,
@@ -20,7 +19,9 @@ import {
   SRGBColorSpace,
   TorusGeometry,
   TubeGeometry,
+  Vector2,
   Vector3,
+  BufferAttribute,
   type BufferGeometry,
   type Material,
   type Object3D,
@@ -58,6 +59,92 @@ function canvasTexture(canvas: HTMLCanvasElement, srgb: boolean): CanvasTexture 
   texture.anisotropy = 8;
   texture.needsUpdate = true;
   return texture;
+}
+
+/**
+ * Subtle tileable orange-peel normal map for the rotomoulded PVC. The flume
+ * surface is glossy, so a very low-amplitude bump keeps the highlight from
+ * looking like a perfect CG cylinder without reading as bumpy plastic.
+ */
+function createPeelNormalTexture(seed = 913, size = 128): Texture {
+  const lattice = 32;
+  const periodic = (ix: number, iy: number): number => {
+    const x = ((ix % lattice) + lattice) % lattice;
+    const y = ((iy % lattice) + lattice) % lattice;
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const smoothNoise = (x: number, y: number): number => {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const xf = x - xi;
+    const yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf);
+    const v = yf * yf * (3 - 2 * yf);
+    const a = periodic(xi, yi);
+    const b = periodic(xi + 1, yi);
+    const c = periodic(xi, yi + 1);
+    const d = periodic(xi + 1, yi + 1);
+    return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+  };
+  const samples = lattice / 4;
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * samples;
+      const v = (y / size) * samples;
+      height[y * size + x] = smoothNoise(u, v) * 0.65 + smoothNoise(u * 2.1 + 3, v * 2.1 + 7) * 0.35;
+    }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D context unavailable');
+  const image = ctx.createImageData(size, size);
+  const strength = 0.55;
+  for (let y = 0; y < size; y++) {
+    const ym = (y - 1 + size) % size;
+    const yp = (y + 1) % size;
+    for (let x = 0; x < size; x++) {
+      const xm = (x - 1 + size) % size;
+      const xp = (x + 1) % size;
+      const dx = (height[y * size + xp] ?? 0) - (height[y * size + xm] ?? 0);
+      const dy = (height[yp * size + x] ?? 0) - (height[ym * size + x] ?? 0);
+      const nx = -dx * strength;
+      const ny = -dy * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      const o = (y * size + x) * 4;
+      image.data[o] = Math.round((nx / len) * 0.5 * 255 + 127.5);
+      image.data[o + 1] = Math.round((ny / len) * 0.5 * 255 + 127.5);
+      image.data[o + 2] = Math.round((nz / len) * 0.5 * 255 + 127.5);
+      image.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  const texture = canvasTexture(canvas, false);
+  texture.minFilter = LinearMipmapLinearFilter;
+  return texture;
+}
+
+/**
+ * Cylindrical UVs for the flume tower: u is arc length around the column and v
+ * is world height, so the 125 mm tile grid keeps its scale around the curve
+ * instead of switching axis at the 45° world-space seams `applyWorldUVs` gives.
+ */
+function applyCylindricalUVs(geometry: BufferGeometry, centerX: number, centerZ: number, radius: number): void {
+  const position = geometry.getAttribute('position');
+  const uvs = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i) - centerX;
+    const z = position.getZ(i) - centerZ;
+    const angle = Math.atan2(z, x);
+    uvs[i * 2] = angle * radius;
+    uvs[i * 2 + 1] = position.getY(i);
+  }
+  geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
 }
 
 /** Deterministic value noise, used only for procedural grime / print textures. */
@@ -222,13 +309,16 @@ class GeometryBatch {
 // Flume material: red PVC with world-space waterline staining
 // ---------------------------------------------------------------------------
 
-function createFlumePvcMaterial(base: MeshPhysicalMaterial, grime: Texture): MeshPhysicalMaterial {
+function createFlumePvcMaterial(base: MeshPhysicalMaterial, grime: Texture, peel: Texture): MeshPhysicalMaterial {
   const material = base.clone();
   material.name = 'flume.pvc.stained';
   material.side = FrontSide;
   material.roughness = 0.2;
   material.clearcoat = 1;
   material.clearcoatRoughness = 0.07;
+  material.normalMap = peel;
+  material.normalScale = new Vector2(0.16, 0.16);
+  peel.repeat.set(28, 8);
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGrime = { value: grime };
     shader.uniforms.uWaterline = { value: LAYOUT.water.surface };
@@ -283,12 +373,31 @@ function createFlumeLinerMaterial(base: MeshPhysicalMaterial): MeshPhysicalMater
   const material = base.clone();
   material.name = 'flume.liner';
   material.side = BackSide;
-  material.color = new Color(0x651a13);
-  material.emissive = new Color(0x120503);
+  material.color = new Color(0x6a1c14);
+  material.emissive = new Color(0x140604);
   material.roughness = 0.46;
   material.clearcoat = 0.7;
   material.clearcoatRoughness = 0.2;
   material.metalness = 0;
+  // The liner's UV.x runs along the tube (1 = the open mouth). Fade the inner
+  // wall to black over the last ~0.7 m so the throat reads as depth instead of
+  // a flat dark cap, and leave a faint wet sheen right at the opening.
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vTubeU;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTubeU = uv.x;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vTubeU;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float throatDepth = smoothstep(0.994, 0.955, vTubeU);
+        diffuseColor.rgb *= mix(1.0, 0.035, throatDepth);
+        diffuseColor.rgb += vec3(0.03, 0.007, 0.003) * smoothstep(0.965, 0.999, vTubeU);`,
+      );
+  };
+  material.customProgramCacheKey = () => 'pool.flume.liner.v2';
+  material.needsUpdate = true;
   return material;
 }
 
@@ -308,7 +417,8 @@ function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: Geometry
   const tubeRadius = S.tubeRadius;
   const mouth = S.end.clone();
   const mouthDirection = S.mouthDirection.clone().normalize();
-  const pvcMaterial = createFlumePvcMaterial(materials.redPlastic, grime);
+  const peel = createPeelNormalTexture();
+  const pvcMaterial = createFlumePvcMaterial(materials.redPlastic, grime, peel);
 
   // Hand-authored silhouette. The spiral generator supplies the corkscrew; the
   // tail points the open mouth at the camera and dips it below the water plane.
@@ -347,7 +457,7 @@ function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: Geometry
   // A chrome repair coupling, bolted around the tube just behind the mouth, so
   // the splash end reads as maintained hardware rather than a smooth toy.
   {
-    const clampT = 1 - 1.1 / tubeLength;
+    const clampT = 1 - 1.6 / tubeLength;
     const clampPoint = curve.getPointAt(clampT);
     const clampTangent = curve.getTangentAt(clampT).normalize();
     const axial = new Quaternion().setFromUnitVectors(UP, clampTangent);
@@ -385,26 +495,15 @@ function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: Geometry
   liner.castShadow = false;
   group.add(liner);
 
-  // Occlude the far end of the throat so the mouth reads as depth, not a hole.
-  const throatT = 1 - 0.95 / tubeLength;
-  const throat = new Mesh(
-    new CircleGeometry(tubeRadius - 0.24, 40),
-    new MeshStandardMaterial({ name: 'flume.throat', color: 0x1c0705, roughness: 0.58, metalness: 0 }),
-  );
-  throat.position.copy(curve.getPointAt(throatT));
-  throat.quaternion.setFromUnitVectors(FORWARD, curve.getTangentAt(throatT).normalize());
-  throat.name = 'slide.throat';
-  group.add(throat);
-
   // ---- Tower, platform, funnel --------------------------------------------
   const towerTop = S.platformY - 0.1;
   const lowerTower = new CylinderGeometry(0.4, 0.62, -LAYOUT.water.floor, 26, 1, false);
   lowerTower.translate(S.tower.x, LAYOUT.water.floor / 2, S.tower.z);
-  applyWorldUVs(lowerTower);
+  applyCylindricalUVs(lowerTower, S.tower.x, S.tower.z, 0.5);
   addStaticMesh(group, lowerTower, materials.tileUnderwater, 'slide.tower.submerged');
   const upperTower = new CylinderGeometry(0.4, 0.58, towerTop, 26, 1, false);
   upperTower.translate(S.tower.x, towerTop / 2, S.tower.z);
-  applyWorldUVs(upperTower);
+  applyCylindricalUVs(upperTower, S.tower.x, S.tower.z, 0.5);
   addStaticMesh(group, upperTower, materials.tileWall, 'slide.tower');
 
   const towerBase = new CylinderGeometry(0.85, 0.95, 0.32, 24, 1, false);
