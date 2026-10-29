@@ -463,9 +463,13 @@ unfocused window throttles rAF to ~1 Hz on this machine) and reads pixels from
 the WebGL drawing buffer, which is pixel-identical to a CDP screenshot and much
 faster. Per-shot scene times are chosen so the water motion is mid-beat
 (`SHOT_TIMES` in `lib/bench.mjs`). The manifest stores each frame's scene time,
-size, renderer stats and SHA-256; the trailer plan steps the guided camera at
-exactly 24 fps, burns the 2.39 bars, cuts windows together with 0.6 s
-cross-dissolves and verifies the encoded file with `ffprobe`.
+size, renderer stats, verification flags and SHA-256; the trailer plan steps the
+guided camera at exactly 24 fps, burns the 2.39 bars, cuts windows together with
+0.6 s cross-dissolves and verifies the encoded file with `ffprobe`. The
+committed cut is 22.83 s (548 encoded frames at 24 fps, three 8 s windows),
+1920×1080 H.264 `yuv420p` with 138 px bars top and bottom; `stills/trailer.json`
+records the frame plan, the xfade chain, the file's SHA-256 and the ffprobe
+result.
 
 ## 15. Measured performance
 
@@ -475,16 +479,17 @@ volumetrics NaN fix (`0eb3036b`), the final post grade and the reframed shots
 merged. Numbers move by a few percent with host load; the distribution below is
 from the quiet run used for the committed stills.
 
-Frames were timed in shot mode at the arrival pose (the heaviest), 553 frames
-after warm-up, with the browser focused:
+Frames were timed in shot mode at the arrival pose (the heaviest) after warm-up,
+with the browser focused and no other capture running:
 
 | Metric | Measured |
 | --- | --- |
-| average / p50 / p95 / max frame time | 9.1 / 8.9 / 11.5 / 21.7 ms |
-| average fps | 109.8 |
+| average / p50 / p95 / max frame time | 9.0 / 9.0 / 10.8 / 13.8 ms |
+| average fps | 111.0 |
 | frames over 22.2 ms (45 fps) after warm-up | 0 |
 | draw calls / triangles | 355 / 96,054 |
-| load to `__POOL_READY__` (ultra, includes IBL + probe bake) | ≈5.0 s |
+| load to `__POOL_READY__` (ultra, includes IBL + probe bake) | 4.96 s |
+| low-preset (1280×720) load to ready | 2.62 s |
 | bake cost | 279,936 primary + 122,581 shadow rays, 96.7k tris, ~1.1 s |
 
 Per-shot draw calls and triangles at 1920×1080 (from the stills manifest):
@@ -503,12 +508,13 @@ Per-shot draw calls and triangles at 1920×1080 (from the stills manifest):
 The low preset boots at 1280×720 with `renderScale` 0.6 (768×432 drawing
 buffer), 351 calls and 96.0k triangles, and its bake uses 3600 probes, 15×8×30,
 N=35, two bounces. The budget in the acceptance criteria is 45 fps at 1080p
-ultra, ≤700 draw calls and ≤500k triangles; the measured worst frame here was
-21.7 ms and the call/triangle counts are dominated by props, not by particles.
-The machine is a shared capture host, so a run during heavy parallel work can
-report lower numbers (the earlier same-head runs ranged ~99–117 fps); the
-warm-up-excluded distribution above is from a quiet run and every frame in it
-met the bar.
+ultra, ≤700 draw calls and ≤500k triangles; every measured frame met the bar and
+the call/triangle counts are dominated by props, not by particles. The machine
+is a shared capture host, so a run during heavy parallel work can report lower
+numbers (the earlier same-head runs ranged ~99–117 fps); the same-head numbers
+above are from the quiet run that produced the committed stills, and the arrival
+still's SHA-256 (`91d96d4d51…`) is byte-identical to the determinism harness's
+shot capture.
 
 ## 16. Known limitations
 
@@ -581,6 +587,9 @@ These are real and deliberately not hidden with darkness, blur or letterbox:
 
 Committed evidence for this run lives under `docs/evidence/` (before/after pairs
 from the post, camera and bench lanes) and `stills/` (final stills, 4K hero,
-trailer, manifest and trailer plan). `pnpm determinism` and `pnpm perf` regenerate the numbers quoted above;
-`pnpm stills` and `pnpm trailer` regenerate the images and video
-deterministically.
+trailer, manifest and trailer plan; the manifest records each frame's scene
+time, stats and SHA-256, and `trailer.json` records the plan, xfade chain, file
+SHA-256 and ffprobe result). `pnpm determinism` and `pnpm perf` regenerate the
+numbers quoted above; `pnpm stills` and `pnpm trailer` regenerate the images and
+video deterministically. The arrival still hashes to `91d96d4d51…`, the same
+SHA-256 the determinism harness reports for its shot capture.
