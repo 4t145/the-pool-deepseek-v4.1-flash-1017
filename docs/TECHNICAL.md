@@ -63,6 +63,33 @@ matters for shot composition and the flume side.
 - water `x ∈ [-7.2, 7.2]`, `z ∈ [-27.5, 27.5]`
 - camera shots are inside the hall; see `SHOTS` in `layout.ts`.
 
+## Props
+
+`src/world/props.ts` builds one static `Group`; `src/world/propLayout.ts` owns the
+pure maths (corkscrew sampling, ring float pose, railing spans) so it can be
+tested without WebGL (`tests/props.test.ts`).
+
+- `LAYOUT.slide` is the flume contract: `tower` (the tiled column the helix wraps,
+  x/z), `platformY`, `topY`, `helixRadius`, `tubeRadius`, and the mouth anchor
+  `end` (centre), `mouthRadius`, `mouthDirection` (unit axis out of the opening)
+  and `waterlineY`. Water/foam and capture tools should read these instead of
+  hard-coded points; `materials.redPlastic` is **not** used by the flume (two
+  clones with their own shader hooks are).
+- The flume is a corkscrew of open `TubeGeometry` (FrontSide) plus a slightly
+  smaller BackSide liner whose UV.x drives a throat-darkening gradient, so the
+  mouth is genuinely hollow. World-space stain/tide/scale/streak shading and a
+  tileable orange-peel normal are injected with `onBeforeCompile` on the clones;
+  `PropsSystem.causticTargets` exposes exactly those two materials for the water
+  caustics pass.
+- Rings are flattened toruses with printed vinyl textures, moulded seam tori and
+  valve hardware; the float pose is `ringFloatPose` (deterministic, ±11 mm bob,
+  waterline cuts the tube). Railings are split into spans with a bay at every
+  ladder (`railingSpans`) and the ladder handrails fill the bay, so nothing
+  intersects and every post lands on the deck.
+- Chrome hardware (rails, ladders, struts, collars, clamps, bolts, platform rail)
+  is merged into one mesh and the ring seams/valves merge per ring: the props
+  pass costs one draw call per material group instead of ~160.
+
 ## Camera
 
 `SHOTS` in `layout.ts` is the framing contract for the seven stills. The guided
