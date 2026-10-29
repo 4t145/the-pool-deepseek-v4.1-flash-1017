@@ -49,6 +49,7 @@ const WARN_ACCELERATION = args.number('max-accel', 6); // m/s^2
 const SEAM_EPSILON = 0.001; // seconds
 const aspect = args.number('aspect', 16 / 9);
 const checkFraming = args.option('framing', 'on') !== 'off';
+const probeSpecs = args.list('probe-windows', null);
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const length = (v) => Math.hypot(v[0], v[1], v[2]);
@@ -343,6 +344,25 @@ try {
       .map((window) => `[${window.start.toFixed(1)}-${window.end.toFixed(1)}] ${window.maxSpeed.toFixed(2)} m/s / ${window.maxTurn.toFixed(1)} °/s`)
       .join(' · ')}`,
   );
+
+  // Specific windows a trailer cut may want (start:duration), reported exactly.
+  if (probeSpecs) {
+    report.probeWindows = probeSpecs.map((spec) => {
+      const [startRaw, durationRaw] = spec.split(':');
+      const start = Number(startRaw);
+      const duration = Number(durationRaw ?? windowSeconds);
+      const insideWindow = motion.filter((sample) => sample.t > start && sample.t <= start + duration);
+      const maxSpeed = insideWindow.reduce((max, sample) => Math.max(max, sample.speed), 0);
+      const maxTurn = insideWindow.reduce((max, sample) => Math.max(max, sample.turn), 0);
+      const meanSpeed = insideWindow.reduce((sum, sample) => sum + sample.speed, 0) / Math.max(insideWindow.length, 1);
+      return { start, duration, end: start + duration, maxSpeed, maxTurn, meanSpeed };
+    });
+    console.log(
+      `[camera] probed windows: ${report.probeWindows
+        .map((window) => `[${window.start}-${window.end}] ${window.maxSpeed.toFixed(2)} m/s / ${window.maxTurn.toFixed(1)} °/s`)
+        .join(' · ')}`,
+    );
+  }
 
   // --- Each shot must land exactly on its LAYOUT pose and stay inside the room.
   for (const shot of SHOTS) {
