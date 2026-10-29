@@ -75,3 +75,18 @@ quality=ultra, capture mode, arrival shot at scene time t=2.
    same session: mean display YAVG 107.895 fixed vs 111.054 old, i.e. the frame
    is ~3 % darker overall, with the tile clearcoat IBL cut 20 % and matte walls
    58 %. Side-by-side committed as docs/evidence/lighting-ibl-fix-720.jpg.
+
+7. Owner goal revision 1 (art-direction correction) - lighting side
+   Change: fog 0x74898d @0.0088 -> 0x46575a @0.0105 (darker, cooler, deeper
+   falloff), IBL base intensity 0.8 -> 0.68 on all classes, hemisphere fill
+   0.14 -> 0.10, analytic skylight card 0.85 -> 0.70, volumetric shaft cards
+   -42 %, corridor haze layers -40 %, dust 0.34 -> 0.16. The water body look
+   (deep green-black, caustics, foam) belongs to w3's claimed repair; the
+   reflection-kernel change w1 prototyped for the dashed artifacts was reverted
+   from this patch to avoid conflicting edits in water.ts and handed to w3.
+   Same-head A/B, 1920x1080, t=2, accepted post (de013805 + this change):
+     arrival  before mean 0.417 p50 0.420 p90 0.635 p95 0.745 p99 0.925
+              after  mean 0.400 p50 0.396 p90 0.616 p95 0.733 p99 0.922
+     arch     after  mean 0.459 p50 0.482 p90 0.663 p95 0.737 p99 0.886
+   -> midtones -4 to -6 %, highlights held (p99 unchanged, 0.00 % clipped), which
+   is the intended single correction before w8's grade pass.
