@@ -81,14 +81,16 @@ tested without WebGL (`tests/props.test.ts`).
   tileable orange-peel normal are injected with `onBeforeCompile` on the clones;
   `PropsSystem.causticTargets` exposes exactly those two materials for the water
   caustics pass.
-- Rings are flattened toruses with printed vinyl textures, moulded seam tori and
-  valve hardware; the float pose is `ringFloatPose` (deterministic, ±11 mm bob,
-  waterline cuts the tube). Railings are split into spans with a bay at every
-  ladder (`railingSpans`) and the ladder handrails fill the bay, so nothing
-  intersects and every post lands on the deck.
+- Rings are flattened toruses with printed vinyl textures (the mould seam is
+  printed into the texture at the torus UV seam and equator, not modelled as a
+  thin torus, because a 5 mm dark ring aliased into a dotted black line at
+  1080p) and valve hardware; the float pose is `ringFloatPose` (deterministic,
+  ±11 mm bob, waterline cuts the tube). Railings are split into spans with a bay
+  at every ladder (`railingSpans`) and the ladder handrails fill the bay, so
+  nothing intersects and every post lands on the deck.
 - Chrome hardware (rails, ladders, struts, collars, clamps, bolts, platform rail)
-  is merged into one mesh and the ring seams/valves merge per ring: the props
-  pass costs one draw call per material group instead of ~160.
+  is merged into one mesh and the per-ring valve/slot geometry merges per ring:
+  the props pass costs one draw call per material group instead of ~160.
 
 ## Camera
 
