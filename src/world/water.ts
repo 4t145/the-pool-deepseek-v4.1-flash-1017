@@ -334,11 +334,7 @@ const FRAGMENT = /* glsl */ `
     vec2 distortion = normal.xz * uDistortion * (0.35 + 0.65 * (1.0 - ndv));
     // A still pool is not a perfect dielectric mirror: a thin film of suspended
     // matter at the interface pulls the reflection towards the deep body colour.
-    vec3 reflection = mix(
-      reflectionColor(reflectUv + distortion, cameraDistance),
-      uDeepColor,
-      0.22,
-    ) * uReflectionStrength;
+    vec3 reflection = mix(reflectionColor(reflectUv + distortion, cameraDistance), uDeepColor, 0.22) * uReflectionStrength;
 
     vec3 color = mix(refracted, reflection, fresnel);
 
