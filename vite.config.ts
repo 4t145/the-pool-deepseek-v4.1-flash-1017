@@ -10,7 +10,7 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,mjs}'],
     environment: 'node',
   },
 });
