@@ -207,8 +207,8 @@ export function buildLighting(options: LightingOptions): Lighting {
 
   // One warm lamp deep inside the corridor: it lights the tiled side walls so the
   // arch reads as a lit space, while the doorway plane supplies the warm depth.
-  const corridorLight = new PointLight(0xffa860, 85, 30, 2);
-  corridorLight.position.set(LAYOUT.floodLight.position.x, 3.1, LAYOUT.hall.zMax + 4.2);
+  const corridorLight = new PointLight(0xff9a4d, 46, 26, 2);
+  corridorLight.position.set(LAYOUT.floodLight.position.x, 2.6, LAYOUT.hall.zMax + 4.6);
   scene.add(corridorLight);
   pointLights.push(corridorLight);
 

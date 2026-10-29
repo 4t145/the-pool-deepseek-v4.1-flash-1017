@@ -93,7 +93,8 @@ const DUST_VERTEX = /* glsl */ `
     p.z += cos(uTime * 0.09 + aPhase * 1.7) * 0.2;
     vec4 mv = viewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize * uPixelRatio * (6.0 / max(-mv.z, 1.0));
+    // Motes swell a little near the skylight so looking up reads as dust in the beam.
+    gl_PointSize = aSize * uPixelRatio * (4.2 / max(-mv.z, 1.0)) * (0.7 + 0.8 * smoothstep(4.5, 9.0, position.y));
     vFade = smoothstep(0.6, 2.0, -mv.z) * (1.0 - smoothstep(28.0, 44.0, -mv.z));
   }
 `;
@@ -218,7 +219,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
       height,
       tilt: sunLean,
       seed: index * 1.37,
-      intensity: (0.05 + rng.range(0, 0.018)) * intensity,
+      intensity: (0.085 + rng.range(0, 0.025)) * intensity,
       color: cool,
     });
     index += 1;
@@ -251,7 +252,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
   group.add(shafts);
 
   // ---- Dust motes ---------------------------------------------------------
-  const dustCount = 620;
+  const dustCount = 760;
   const positions = new Float32Array(dustCount * 3);
   const phases = new Float32Array(dustCount);
   const speeds = new Float32Array(dustCount);
@@ -260,7 +261,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     // Concentrate motes under the skylight volume, a few in the corridor haze.
     const corridor = rng.bool(0.12);
     const x = corridor ? rng.range(-1.4, 1.4) : rng.range(-1.9, 1.9);
-    const y = rng.range(0.2, 9.4);
+    const y = rng.bool(0.55) ? rng.range(4.6, 9.4) : rng.range(0.2, 4.6);
     const z = corridor
       ? rng.range(LAYOUT.hall.zMax + 0.6, LAYOUT.hall.zMax + 5)
       : rng.range(LAYOUT.skylight.zMin, LAYOUT.skylight.zMax);
@@ -287,7 +288,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     uniforms: {
       uTime: { value: 0 },
       uColor: { value: new Color(0xf2f6f4) },
-      uIntensity: { value: 0.22 * intensity },
+      uIntensity: { value: 0.34 * intensity },
       uPixelRatio: { value: 1 },
     },
   });
