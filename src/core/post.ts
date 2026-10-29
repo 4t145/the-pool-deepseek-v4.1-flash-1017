@@ -21,7 +21,7 @@ export const BLOOM_THRESHOLD = 1.5;
 /** Soft-knee width around the bloom threshold; keeps the highlight ramp continuous. */
 export const BLOOM_KNEE = 0.35;
 /** Peak bloom multiplier of the whole chain (the API value scales this). */
-export const BLOOM_GAIN = 0.8;
+export const BLOOM_GAIN = 0.68;
 /** Fine monochrome grain amplitude in display units. */
 export const GRAIN_AMOUNT = 0.017;
 /** Vignette strength at the frame corners. */
@@ -29,8 +29,8 @@ export const VIGNETTE_AMOUNT = 0.24;
 /** Edge chromatic aberration scale (UV units at the frame corner, before masking). */
 export const CHROMATIC_AMOUNT = 1.0;
 /** Saturation and contrast of the contained grade (display space). */
-export const GRADE_SATURATION = 1.06;
-export const GRADE_CONTRAST = 1.04;
+export const GRADE_SATURATION = 1.09;
+export const GRADE_CONTRAST = 1.075;
 /** Grain cadence; the trailer steps the clock at exactly this rate. */
 export const GRAIN_FRAME_RATE = 24;
 /** Optional 2.39:1 presentation mask. */
@@ -265,9 +265,9 @@ export function grade(rgb: Rgb, saturation = GRADE_SATURATION, contrast = GRADE_
   const shadow = 1 - clamp01((luma - 0.02) / 0.42);
   const highlight = clamp01((luma - 0.62) / 0.38);
   color = [
-    color[0]! - 0.003 * shadow + 0.004 * highlight,
-    color[1]! + 0.004 * shadow + 0.002 * highlight,
-    color[2]! + 0.008 * shadow - 0.002 * highlight,
+    color[0]! - 0.0035 * shadow + 0.005 * highlight,
+    color[1]! + 0.0045 * shadow + 0.002 * highlight,
+    color[2]! + 0.009 * shadow - 0.0025 * highlight,
   ];
   return color.map(clamp01) as [number, number, number];
 }

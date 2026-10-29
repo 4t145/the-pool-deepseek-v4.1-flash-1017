@@ -251,8 +251,8 @@ const FINAL_FRAGMENT = /* glsl */ `
     color = (color - 0.5) * uContrast + 0.5;
     float shadow = 1.0 - smoothstep(0.02, 0.44, luma);
     float highlight = smoothstep(0.62, 1.0, luma);
-    color += vec3(-0.003, 0.004, 0.008) * shadow;
-    color += vec3(0.004, 0.002, -0.002) * highlight;
+    color += vec3(-0.0035, 0.0045, 0.009) * shadow;
+    color += vec3(0.005, 0.002, -0.0025) * highlight;
 
     // Gentle vignette; never a black tube.
     float radius = length(centered * vec2(1.0, 0.82));
