@@ -72,11 +72,25 @@ export const LAYOUT = {
     topY: 1.34,
   },
   slide: {
-    tower: new Vector3(5.65, 0, -13.2),
+    /** Central tiled column the corkscrew wraps around. */
+    tower: new Vector3(4.55, 0, -14.5),
+    /** Top of the tower / red boarding platform. */
+    platformY: 6.55,
+    /** Funnel rim height above the platform. */
     topY: 7.15,
-    helixRadius: 2.35,
-    end: new Vector3(3.25, 0.28, -16.1),
-    tubeRadius: 0.98,
+    /** Mean helix radius of the authored control points. */
+    helixRadius: 1.5,
+    /** Outer tube radius in metres. */
+    tubeRadius: 0.82,
+    /**
+     * Mouth centre. The opening is partly below the water plane so the flume
+     * reads as half-drowned; the water system anchors contact foam here.
+     */
+    end: new Vector3(3.3, 0.55, -16.6),
+    /** Unit axis pointing out of the mouth, towards the flume/arrival cameras. */
+    mouthDirection: new Vector3(-0.95, -0.12, -0.28).normalize(),
+    /** Mouth opening radius, for foam/wake anchoring. */
+    mouthRadius: 0.86,
   },
   rings: [
     { id: 'yellow', color: 0xe8b21b, position: new Vector3(-2.15, 0.045, -7.6), radius: 0.56, tube: 0.16, phase: 0.0 },
