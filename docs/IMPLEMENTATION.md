@@ -66,8 +66,9 @@ between stages so the loader can paint:
    joints, lane markings, bulkhead lamps, ceiling services, grilles, hatch,
    waterline band).
 6. **Props** — the corkscrew flume (tiled column, platform, funnel, closed PVC
-   helix, hollow liner/lip, chrome A-frames), three printed vinyl rings, merged
-   ladders and guardrails. Exposes `causticTargets` for the flume material.
+   helix, hollow liner/lip, welded chrome collars and struts), three printed
+   vinyl rings, merged ladders and guardrails. Exposes `causticTargets` for the
+   flume material.
 7. **Caustics wiring** — after props exist, the two flume materials are added to
    the caustic patcher.
 8. **Lighting** — sun + area lights + fluorescent points + warm corridor light,
