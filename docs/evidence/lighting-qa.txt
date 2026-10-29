@@ -43,3 +43,17 @@ quality=ultra, capture mode, arrival shot at scene time t=2.
    and re-captured: docs/evidence/lighting-sunbar-softening-720.jpg. Shaft cards
    were also given a parabolic lateral falloff + wobble so their quad boundary
    can no longer read as a sheet.
+
+5. Review follow-ups (w2, w5)
+   - "Dust motes render as square points" near the arch: A/B on the same 1920x1080
+     frame with the dust Points material intensity forced to 0 AND the shaft mesh
+     hidden (docs/evidence/lighting-arch-dust-ab.jpg, left = on, right = off).
+     The white square clusters are identical in both frames, so they are the tile
+     specular sparkle (reported to w4), not lighting volumetrics. w1 also hardened
+     the dust anyway: distance fade at 7-17 m (no 1 px dots), 2.6 px size cap,
+     gl_PointCoord radial falloff.
+   - "Far corridor glow reads white-hot": doorway emissive peak 2.7 -> 1.85 and
+     hue 0xffb26b -> 0xff9d4c, corridor lamp 46 -> 38 cd at 0xff8f3f, haze colour
+     warmed. docs/evidence/lighting-arch-amber-1080.jpg shows the amber depth.
+   - "Sun bar still a cut edge": shadow radius 5.5 -> 8.0 (r186 PCF penumbra);
+     the arch still shows the same diagonal, now with a gradual edge.
