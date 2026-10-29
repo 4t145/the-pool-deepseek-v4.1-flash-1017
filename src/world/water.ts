@@ -265,14 +265,22 @@ const FRAGMENT = /* glsl */ `
 
   vec3 reflectionColor(vec2 uv, float distanceToCamera) {
     // Micro-roughness widens the reflection with distance; fixed taps keep it
-    // temporally stable (no jitter, no frame-dependent noise).
-    float blur = mix(0.25, 1.25, saturate(distanceToCamera / 46.0));
+    // temporally stable (no jitter, no frame-dependent noise). The near-field
+    // floor is deliberately wider than one texel: thin bright geometry (rails,
+    // ladder rungs, the flume waterline) samples sub-texel in the half-scale
+    // reflection target and breaks into dashed black strokes. A small fixed
+    // 9-tap kernel averages that away without ghosting and without TAA.
+    float blur = mix(0.95, 2.1, saturate(distanceToCamera / 46.0));
     vec2 step0 = uTexel * blur;
-    vec3 color = texture2D(uReflection, uv).rgb * 0.4;
-    color += texture2D(uReflection, uv + vec2(step0.x, 0.0)).rgb * 0.15;
-    color += texture2D(uReflection, uv - vec2(step0.x, 0.0)).rgb * 0.15;
-    color += texture2D(uReflection, uv + vec2(0.0, step0.y)).rgb * 0.15;
-    color += texture2D(uReflection, uv - vec2(0.0, step0.y)).rgb * 0.15;
+    vec3 color = texture2D(uReflection, uv).rgb * 0.28;
+    color += texture2D(uReflection, uv + vec2(step0.x, 0.0)).rgb * 0.11;
+    color += texture2D(uReflection, uv - vec2(step0.x, 0.0)).rgb * 0.11;
+    color += texture2D(uReflection, uv + vec2(0.0, step0.y)).rgb * 0.11;
+    color += texture2D(uReflection, uv - vec2(0.0, step0.y)).rgb * 0.11;
+    color += texture2D(uReflection, uv + step0).rgb * 0.07;
+    color += texture2D(uReflection, uv - step0).rgb * 0.07;
+    color += texture2D(uReflection, uv + vec2(step0.x, -step0.y)).rgb * 0.07;
+    color += texture2D(uReflection, uv + vec2(-step0.x, step0.y)).rgb * 0.07;
     return color;
   }
 
@@ -590,6 +598,10 @@ export function buildWater(
       activeRenderer.clippingPlanes = previousClipping;
     },
     renderReflection(activeRenderer, activeScene, activeCamera) {
+      material.uniforms.uTexel!.value.set(
+        1 / Math.max(reflectionTarget.width, 1),
+        1 / Math.max(reflectionTarget.height, 1),
+      );
       activeCamera.updateMatrixWorld();
       const matrix = reflectCamera(activeCamera, virtualCamera);
       material.uniforms.uTextureMatrix!.value.copy(matrix);
