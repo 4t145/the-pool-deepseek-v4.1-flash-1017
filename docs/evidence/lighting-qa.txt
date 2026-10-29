@@ -129,3 +129,22 @@ quality=ultra, capture mode, arrival shot at scene time t=2.
    w1's reflection-strength test, the remaining marks behave like static detail:
    they sit at the pier positions of w7's high-level ventilation grilles and
    along the deck joint, i.e. geometry, not specular aliasing. Flagged to w7.
+
+10. Owner goal rev2 - black dashed strokes: ROOT CAUSE AND FIX
+    Root cause: SHAFT_FRAGMENT used pow(vUv.y, 0.8) with an interpolated UV that
+    can be an ulp outside [0,1] on the quad border. pow(negative, y) is NaN in
+    GLSL. A NaN radiance with AdditiveBlending lands in the HalfFloat target as
+    NaN, which the display transform resolves to black: a hard 1 px black stroke
+    along the card edge, crossing wall, coping and water simultaneously (which is
+    why it looked screen-space and why it appeared in the reflection too).
+    Additive blending itself can only brighten, which is why every earlier
+    "darkening" theory failed to reproduce.
+    Fix (src/world/volumetrics.ts): clamp every pow base and the final radiance
+    (clamp(vUv.y,0,1), max(...) guards), replace normalize(cameraPosition -
+    vWorld) with a guarded division, and clamp the dust point size to >= 1 px.
+    Depth testing restored (the strokes were never depth-clipped slivers).
+    A/B 3x crop, ring 1920x1080 t=18.6, before/after:
+    docs/evidence/rev2-volumetrics-nan-fix-ab-3x.jpg. The strokes are entirely
+    gone; the additive shaft haze and dust remain visible and unchanged in
+    intensity (0.026-0.036 per card), and the seven-shot captures are unaffected
+    in framing. No perf/draw-call change.

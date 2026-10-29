@@ -254,8 +254,15 @@ const FRAGMENT = /* glsl */ `
       float r = length(delta);
       float radius = uRingCenters[i].z;
       float tube = uRingCenters[i].w;
-      float band = 1.0 - smoothstep(tube * 0.55, tube * 1.2 + 0.02, abs(r - radius));
-      foam = max(foam, band * (0.32 + 0.68 * noiseValue));
+      // The visible waterline is the meniscus where the flattened torus cuts
+      // y = 0: roughly radius +/- 0.8 tube. Two thin Gaussian lines (outer and
+      // inner contact) read as contact foam without a halo disc.
+      float offset = tube * 0.8;
+      float sigma = tube * 0.45;
+      float outer = exp(-pow((r - (radius + offset)) / sigma, 2.0));
+      float inner = exp(-pow((r - (radius - offset)) / sigma, 2.0));
+      float band = max(outer, inner);
+      foam = max(foam, band * (0.55 + 0.45 * noiseValue));
     }
     float mouthR = length(p - uMouth.xy);
     float mouthMask = 1.0 - smoothstep(uMouth.z * 0.35, uMouth.z * 1.05, mouthR);
@@ -360,7 +367,7 @@ const FRAGMENT = /* glsl */ `
     float scum = 1.0 - smoothstep(0.0, 0.06, edge);
     float foam = copingBand * (0.16 + 0.5 * noiseValue) * 0.2;
     foam += scum * 0.09 * (0.4 + 0.6 * fineNoise);
-    foam = max(foam, contactFoam(worldUv, fineNoise) * 0.26);
+    foam = max(foam, contactFoam(worldUv, fineNoise) * 0.42);
     // A few drifting flecks, never white cartoon suds.
     float flecks = smoothstep(0.82, 0.94, fineNoise) * smoothstep(0.3, 0.9, noiseValue) * 0.055;
     foam += flecks;
