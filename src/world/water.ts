@@ -93,19 +93,24 @@ function addShaderHook(
   hook: (shader: WebGLProgramParametersWithUniforms) => void,
 ): void {
   const target = material as HookedMaterial;
-  if (!target.userData.__poolShaderHooks) {
-    target.userData.__poolShaderHooks = new Map();
+  // `Material.copy()` round-trips userData through JSON, so a cloned material
+  // can inherit a plain `{}` here instead of the Map. Rebuild in that case.
+  const stored = target.userData.__poolShaderHooks;
+  const hooks =
+    stored instanceof Map
+      ? (stored as Map<string, (shader: WebGLProgramParametersWithUniforms) => void>)
+      : new Map<string, (shader: WebGLProgramParametersWithUniforms) => void>();
+  if (stored !== hooks) {
+    target.userData.__poolShaderHooks = hooks;
     const previous = target.onBeforeCompile;
     const previousKey = target.customProgramCacheKey.bind(target);
     target.onBeforeCompile = (shader, renderer) => {
       previous.call(target, shader, renderer);
-      const hooks = target.userData.__poolShaderHooks;
-      if (hooks) for (const entry of hooks.values()) entry(shader);
+      for (const entry of hooks.values()) entry(shader);
     };
-    target.customProgramCacheKey = () =>
-      `${previousKey()}|pool:${[...target.userData.__poolShaderHooks!.keys()].join(',')}`;
+    target.customProgramCacheKey = () => `${previousKey()}|pool:${[...hooks.keys()].join(',')}`;
   }
-  target.userData.__poolShaderHooks.set(key, hook);
+  hooks.set(key, hook);
 }
 
 /**
@@ -288,7 +293,7 @@ const FRAGMENT = /* glsl */ `
       foam = max(foam, band * (0.32 + 0.68 * noiseValue));
     }
     float mouthR = length(p - uMouth.xy);
-    float mouthMask = 1.0 - smoothstep(uMouth.z * 0.55, uMouth.z * 1.5, mouthR);
+    float mouthMask = 1.0 - smoothstep(uMouth.z * 0.35, uMouth.z * 1.05, mouthR);
     foam = max(foam, mouthMask * (0.3 + 0.7 * noiseValue) * uMouth.w);
     return foam;
   }
@@ -384,7 +389,7 @@ const FRAGMENT = /* glsl */ `
     float flecks = smoothstep(0.78, 0.92, fineNoise) * smoothstep(0.3, 0.9, noiseValue) * 0.16;
     foam += flecks;
     foam = saturate(foam * uFoamStrength);
-    vec3 foamColor = vec3(0.52, 0.56, 0.52) * (0.72 + 0.28 * noiseValue);
+    vec3 foamColor = vec3(0.44, 0.48, 0.45) * (0.65 + 0.35 * noiseValue);
     color = mix(color, foamColor, foam);
 
     // ---- Fog -------------------------------------------------------------
@@ -531,10 +536,10 @@ export function buildWater(
       uRingCenters: { value: ringCenters },
       uRingPhases: { value: ringPhases },
       uMouth: {
-        value: new Vector4(LAYOUT.slide.end.x, LAYOUT.slide.end.z, LAYOUT.slide.tubeRadius, 0.9),
+        value: new Vector4(LAYOUT.slide.end.x, LAYOUT.slide.end.z, LAYOUT.slide.mouthRadius, 0.9),
       },
       uRefractionOn: { value: 1 },
-      uCausticColor: { value: new Color(0xffe9c9).multiplyScalar(0.5) },
+      uCausticColor: { value: new Color(0xffe9c9).multiplyScalar(0.38) },
       uCausticStrength: { value: 1 },
       uReflectionStrength: { value: 1 },
       uFoamStrength: { value: 1 },

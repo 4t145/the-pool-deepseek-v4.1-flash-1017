@@ -135,6 +135,11 @@ export class App {
 
     this.setLoading('INSTALLING THE FLUME', 0.64);
     this.props = buildProps(this.scene, materials);
+    // The flume uses its own cloned PVC + liner materials; register the caustics
+    // hook on those as well so the submerged tube is lit like the basin tile.
+    for (const material of this.props.causticTargets) {
+      this.caustics?.apply(material, { strength: 0.45, scale: 1.3 });
+    }
     await yieldToPaint();
 
     this.setLoading('BAKING THE OVERCAST', 0.72);
