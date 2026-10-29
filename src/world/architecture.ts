@@ -3,12 +3,10 @@ import {
   BoxGeometry,
   Color,
   CylinderGeometry,
-  DoubleSide,
   ExtrudeGeometry,
   Group,
   MeshBasicMaterial,
   type Material,
-  MeshStandardMaterial,
   Path,
   PlaneGeometry,
   Shape,
@@ -21,6 +19,7 @@ import {
 import { LAYOUT } from './layout';
 import { addStaticMesh, applyWorldUVs, wallPlane, worldBox } from './geometry';
 import type { MaterialLibrary } from './materials';
+import { createFrostedPaneTexture, createSkylightTexture, createWarmDoorwayTexture, hdrColor } from './lightTextures';
 
 interface ArchOpening {
   cx: number;
@@ -90,6 +89,28 @@ export function buildArchitecture(scene: Scene, materials: MaterialLibrary): Arc
   const W = LAYOUT.water;
   const wallHeight = H.ceiling - H.deck;
   const wallCenterY = H.deck + wallHeight / 2;
+
+  // Emissive pane detail (lighting lane): clipped highlights keep their frost,
+  // dirt and seam structure instead of reading as flat white rectangles. The HDR
+  // radiance still comes from the material colour, so the single display
+  // transform contract is untouched. `emissiveMean` is the sRGB-decoded mean of
+  // the modulation map, which the static live bake uses as the pane radiance.
+  if (!materials.windowGlass.map) {
+    materials.windowGlass.map = createFrostedPaneTexture();
+    materials.windowGlass.color.copy(hdrColor(0xf7fbff, 2.95));
+    materials.windowGlass.userData.emissiveMean = 0.62;
+    materials.windowGlass.needsUpdate = true;
+  }
+  if (!materials.skylightGlass.map) {
+    const skylightLength = LAYOUT.skylight.zMax - LAYOUT.skylight.zMin;
+    materials.skylightGlass.map = createSkylightTexture(64, 1024, {
+      bays: 9,
+      seamOffset: 2.5 / skylightLength,
+    });
+    materials.skylightGlass.color.copy(hdrColor(0xffffff, 2.75));
+    materials.skylightGlass.userData.emissiveMean = 0.78;
+    materials.skylightGlass.needsUpdate = true;
+  }
 
   // ---- Outer shell -------------------------------------------------------
   add(wallPlane(58, wallHeight, -H.halfWidth, wallCenterY, 0, Math.PI / 2), materials.tileWall, 'wall.left');
@@ -361,36 +382,97 @@ export function buildArchitecture(scene: Scene, materials: MaterialLibrary): Arc
   applyWorldUVs(farGeometry);
   add(farGeometry, materials.tileWall, 'wall.far');
 
-  // A deep, dim service corridor behind the arch.
-  const corridorMaterial = new MeshStandardMaterial({
-    color: 0x121a1a,
-    roughness: 0.92,
-    metalness: 0,
-    side: DoubleSide,
-  });
+  // ---- Deep warm service corridor behind the arch ------------------------
+  // The warm opening has to read as depth, not a flat orange card: tiled side
+  // walls catch the corridor lamp, a lit doorway sits at the far end with a
+  // falloff map, and two silhouette layers (a frame and a pipe run) parallax
+  // against the glow as the camera moves.
   const farWall = H.zMax;
-  const corridorLength = 6.0;
-  add(wallPlane(7.2, 7.2, 0, 3.6, farWall + corridorLength, Math.PI), corridorMaterial, 'corridor.end', {
-    castShadow: false,
-    receiveShadow: false,
-  });
-  add(wallPlane(corridorLength, 7.2, -3.6, 3.6, farWall + corridorLength / 2, Math.PI / 2), corridorMaterial, 'corridor.left', {
-    castShadow: false,
-    receiveShadow: false,
-  });
-  add(wallPlane(corridorLength, 7.2, 3.6, 3.6, farWall + corridorLength / 2, -Math.PI / 2), corridorMaterial, 'corridor.right', {
-    castShadow: false,
-    receiveShadow: false,
-  });
-  const corridorGlow = new PlaneGeometry(4.4, 4.4);
-  corridorGlow.rotateY(Math.PI);
-  corridorGlow.translate(0, 3.1, farWall + corridorLength - 0.02);
-  add(corridorGlow, materials.warmGlow, 'corridor.glow', { castShadow: false, receiveShadow: false });
-  const corridorFloor = new PlaneGeometry(7.2, corridorLength);
+  const corridorLength = 8.4;
+  const corridorHalfWidth = 3.6;
+  const corridorHeight = H.ceiling - H.deck;
+  const corridorCenterY = H.deck + corridorHeight / 2;
+  add(
+    wallPlane(corridorHalfWidth * 2, corridorHeight, 0, corridorCenterY, farWall + corridorLength, Math.PI),
+    materials.tileWall,
+    'corridor.end',
+    { castShadow: false },
+  );
+  add(
+    wallPlane(corridorLength, corridorHeight, -corridorHalfWidth, corridorCenterY, farWall + corridorLength / 2, Math.PI / 2),
+    materials.tileWall,
+    'corridor.left',
+    { castShadow: false },
+  );
+  add(
+    wallPlane(corridorLength, corridorHeight, corridorHalfWidth, corridorCenterY, farWall + corridorLength / 2, -Math.PI / 2),
+    materials.tileWall,
+    'corridor.right',
+    { castShadow: false },
+  );
+  const corridorCeiling = new PlaneGeometry(corridorHalfWidth * 2, corridorLength);
+  corridorCeiling.rotateX(Math.PI / 2);
+  corridorCeiling.translate(0, H.ceiling, farWall + corridorLength / 2);
+  applyWorldUVs(corridorCeiling);
+  add(corridorCeiling, materials.plaster, 'corridor.ceiling', { castShadow: false, receiveShadow: true });
+  const corridorFloor = new PlaneGeometry(corridorHalfWidth * 2, corridorLength);
   corridorFloor.rotateX(-Math.PI / 2);
   corridorFloor.translate(0, H.deck, farWall + corridorLength / 2);
   applyWorldUVs(corridorFloor);
   add(corridorFloor, materials.tileFloor, 'corridor.floor', { castShadow: false });
+
+  // The warm endpoint: a lit doorway with real falloff and a far-door silhouette.
+  if (!materials.warmGlow.map) {
+    materials.warmGlow.map = createWarmDoorwayTexture();
+    materials.warmGlow.color.copy(hdrColor(0xffb26b, 2.7));
+    materials.warmGlow.userData.emissiveMean = 0.55;
+    materials.warmGlow.needsUpdate = true;
+  }
+  const doorwayGlow = new PlaneGeometry(2.6, 3.9);
+  doorwayGlow.rotateY(Math.PI);
+  doorwayGlow.translate(0, H.deck + 1.95, farWall + corridorLength - 0.02);
+  add(doorwayGlow, materials.warmGlow, 'corridor.doorway', { castShadow: false, receiveShadow: false });
+  for (const side of [-1, 1] as const) {
+    const jamb = new BoxGeometry(0.16, 3.9, 0.16);
+    jamb.translate(side * 1.38, H.deck + 1.95, farWall + corridorLength - 0.12);
+    applyWorldUVs(jamb);
+    add(jamb, materials.darkMetal, `corridor.jamb.${side}`, { castShadow: false, receiveShadow: false });
+  }
+  const doorLintel = new BoxGeometry(2.92, 0.16, 0.16);
+  doorLintel.translate(0, H.deck + 3.9, farWall + corridorLength - 0.12);
+  applyWorldUVs(doorLintel);
+  add(doorLintel, materials.darkMetal, 'corridor.lintel', { castShadow: false, receiveShadow: false });
+
+  // Mid-depth silhouette: a steel frame the eye reads in front of the glow.
+  for (const side of [-1, 1] as const) {
+    const post = new BoxGeometry(0.22, 3.4, 0.22);
+    post.translate(side * 2.55, H.deck + 1.7, farWall + 2.6);
+    applyWorldUVs(post);
+    add(post, materials.darkMetal, `corridor.post.${side}`, { castShadow: false, receiveShadow: false });
+  }
+  const frameLintel = new BoxGeometry(5.32, 0.2, 0.22);
+  frameLintel.translate(0, H.deck + 3.4, farWall + 2.6);
+  applyWorldUVs(frameLintel);
+  add(frameLintel, materials.darkMetal, 'corridor.frame.lintel', { castShadow: false, receiveShadow: false });
+  const corridorPipe = new CylinderGeometry(0.2, 0.2, corridorHalfWidth * 2, 12);
+  corridorPipe.rotateZ(Math.PI / 2);
+  corridorPipe.translate(0, 5.6, farWall + 5.6);
+  applyWorldUVs(corridorPipe);
+  add(corridorPipe, materials.darkMetal, 'corridor.pipe', { castShadow: false, receiveShadow: false });
+
+  // A warm pool of light on the deck just inside the arch.
+  const floorGlow = new PlaneGeometry(3.6, 2.4);
+  floorGlow.rotateX(-Math.PI / 2);
+  floorGlow.translate(0, H.deck + 0.006, farWall + 1.2);
+  const floorGlowMaterial = new MeshBasicMaterial({
+    color: hdrColor(0xffb26b, 0.5),
+    transparent: true,
+    opacity: 0.55,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  add(floorGlow, floorGlowMaterial, 'corridor.floor.pool', { castShadow: false, receiveShadow: false });
 
   // ---- Steps at the far end ---------------------------------------------
   const stair = LAYOUT.stairs;
@@ -457,20 +539,6 @@ export function buildArchitecture(scene: Scene, materials: MaterialLibrary): Arc
   trimGeo.translate(0, 0, H.zMax - 0.25);
   applyWorldUVs(trimGeo);
   add(trimGeo, materials.plaster, 'far.arch.trim', { castShadow: false });
-
-  // Warm spill plane just behind the arch so the opening never reads as a hole in space.
-  const spill = new PlaneGeometry(LAYOUT.farArch.width - 0.1, 4.2);
-  spill.rotateY(Math.PI);
-  spill.translate(0, 2.1, H.zMax + 0.55);
-  const spillMaterial = new MeshBasicMaterial({
-    color: new Color(0xffbd83),
-    transparent: true,
-    opacity: 0.16,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  add(spill, spillMaterial, 'far.spill', { castShadow: false, receiveShadow: false });
 
   group.traverse((object) => {
     if ((object as Mesh).isMesh) {
