@@ -213,19 +213,21 @@ const shotKey = (id: string, time: number): CinematicKey => {
  * and the monotone tangents keep the camera from overshooting into the basin
  * walls or the flume.
  *
- * The time spacing is the pacing: 7–8 s of slow travel between compositions,
- * with the arrival pose as a deliberate near-still beat at the loop point.
+ * The spacing is paced against segment length (roughly 1.3–1.8 m/s chord speed)
+ * so the take reads as one calm drift instead of fast transits between beats
+ * (peak translation is 1.78 m/s, peak pan 13.3 deg/s). The arrival pose stays on
+ * the loop point as a deliberate near-still beat.
  */
 export const CINEMATIC_KEYS: readonly CinematicKey[] = [
   shotKey('arrival', 0),
   shotKey('flume', 6),
-  shotKey('ring', 13.5),
-  shotKey('arch', 19.5),
-  shotKey('tile', 26.5),
-  shotKey('skylight', 34.5),
-  shotKey('float', 42),
+  shotKey('ring', 16),
+  shotKey('arch', 21),
+  shotKey('tile', 25.5),
+  shotKey('skylight', 36.5),
+  shotKey('float', 46.5),
   {
-    time: 48,
+    time: 51,
     position: [0.9, 2.8, -21.5],
     target: [0.5, 1.4, -5.0],
     fov: 55,
