@@ -159,7 +159,7 @@ export class App {
     this.cinematics = new Cinematics(this.camera, this.canvas);
     this.post = new PostPipeline(this.renderer, quality, {
       letterbox: this.settings.letterbox,
-      exposure: 1.25,
+      exposure: 1.2,
       bloom: 0.34,
     });
     this.post.setSize(this.renderer.domElement.width, this.renderer.domElement.height);
