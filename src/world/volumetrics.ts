@@ -65,8 +65,13 @@ const SHAFT_FRAGMENT = /* glsl */ `
   }
 
   void main() {
-    float across = smoothstep(0.0, 0.4, vUv.x) * smoothstep(1.0, 0.6, vUv.x);
-    float along = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
+    // Parabolic falloff over the whole width, plus a slow lateral wobble, so the
+    // card boundary is never a straight line even when seen broadside.
+    float wobble = sin(vUv.y * 9.0 + vSeed * 3.1) * 0.035 + sin(vUv.y * 23.0 + vSeed) * 0.012;
+    float acrossCoord = abs(vUv.x - 0.5 + wobble) * 2.0;
+    float across = pow(max(0.0, 1.0 - acrossCoord), 1.9);
+    // Taper the shaft toward the water so its bottom edge dies out.
+    float along = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.72, vUv.y);
     // Cards are world-Z aligned; fade them out when seen edge-on so they never
     // read as flat sheets from a side camera.
     float edgeOn = smoothstep(0.02, 0.42, abs(dot(normalize(cameraPosition - vWorld), vec3(0.0, 0.0, 1.0))));
@@ -94,8 +99,8 @@ const DUST_VERTEX = /* glsl */ `
     vec4 mv = viewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
     // Motes swell a little near the skylight so looking up reads as dust in the beam.
-    gl_PointSize = aSize * uPixelRatio * (4.2 / max(-mv.z, 1.0)) * (0.7 + 0.8 * smoothstep(4.5, 9.0, position.y));
-    vFade = smoothstep(0.6, 2.0, -mv.z) * (1.0 - smoothstep(28.0, 44.0, -mv.z));
+    gl_PointSize = min(2.6, aSize * uPixelRatio * (4.2 / max(-mv.z, 1.0))) * (0.7 + 0.8 * smoothstep(4.5, 9.0, position.y));
+    vFade = smoothstep(0.6, 2.0, -mv.z) * (1.0 - smoothstep(7.0, 17.0, -mv.z));
   }
 `;
 
@@ -212,14 +217,14 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
 
   // Skylight shafts, one per structural bay, tilted with the oblique sun.
   let index = 0;
-  for (let z = LAYOUT.skylight.zMin + 2; z <= LAYOUT.skylight.zMax - 1; z += 4.2) {
+  for (let z = LAYOUT.skylight.zMin + 2; z <= LAYOUT.skylight.zMax - 1; z += 5.2) {
     cards.push({
       center: [beamCenterX + rng.range(-0.25, 0.25), (ceilingY + floorY) / 2 + 0.4, z],
       width: 0.7 + rng.range(-0.08, 0.12),
       height,
       tilt: sunLean,
       seed: index * 1.37,
-      intensity: (0.085 + rng.range(0, 0.025)) * intensity,
+      intensity: (0.052 + rng.range(0, 0.018)) * intensity,
       color: cool,
     });
     index += 1;

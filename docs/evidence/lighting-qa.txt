@@ -1,0 +1,45 @@
+Lighting integration QA — worker w1
+===================================
+
+Commit under test: c2bc4d65 (lighting bake accepted) merged into w1 branch.
+Headless->headed Chrome on DISPLAY=:0 (NVIDIA RTX 3060), 1920x1080 / 3840x2160,
+quality=ultra, capture mode, arrival shot at scene time t=2.
+
+1. Determinism (acceptance B3)
+   Two renderAt(2) captures, 400 ms apart, same page session:
+     md5 9ef8327dbb644fbcf1e65f161137e9f2  /tmp/w1-det-a.png
+     md5 9ef8327dbb644fbcf1e65f161137e9f2  /tmp/w1-det-b.png
+     ffmpeg psnr: average:inf min:inf max:inf (pixel identical)
+   Scene-graph transform audit: 373 meshes hashed, all static world matrices
+   identical between calls. The bake itself is deterministic: seeded sample
+   rotation, no Math.random and no wall clock in any visual system.
+
+2. Shot-mode performance (acceptance B4)
+   arrival shot live for 4.5 s, 1920x1080, ultra:
+     fps 121.9, draw calls 358, triangles 105,466, mode=shot, no page errors.
+   Bake cost (one time, logged at load): 5832 probes 18x9x36, N=48,
+   279,936 primary + 122,619 shadow rays, 3 bounces, 58,265 tris / 509 meshes,
+   ~1.0-1.1 s. Zero per-frame ray cost.
+
+3. 4K inspection (acceptance A1/A2/A5, art direction "no banding")
+   3840x2160 arrival still opened at 100% in three crops (docs/evidence/
+   lighting-arrival-4k.jpg):
+     - no L2 probe-grid faceting or 1 m blotching in the ceiling or fog
+       gradients; no banding in the warm corridor falloff;
+     - skylight/window highlights keep mullion + frost structure, no flat
+       white core; no blown centre blob;
+     - warm far arch reads as layered depth with a lit doorway, frame and pipe
+       silhouettes.
+   Observed but not in w1's lane: small white specular pixel clusters on the
+   tile around the window piers at 4K (present with w1 dust disabled, so it is
+   a tile-material sparkle, reported to w4).
+
+4. Volumetric attribution (w2 review: "hard straight-edged wedge")
+   A/B captures of the arch shot with volumetric intensity 1 vs 0
+   (docs/evidence/lighting-volumetrics-ab-720.jpg): the hard straight diagonal
+   boundary across the far arch wall is present in both; it is the direct sun
+   bar through the skylight aperture, not the shaft cards. w1 then softened the
+   sun penumbra (shadow radius 2.2 -> 5.5, since r186 removed PCFSoftShadowMap)
+   and re-captured: docs/evidence/lighting-sunbar-softening-720.jpg. Shaft cards
+   were also given a parabolic lateral falloff + wobble so their quad boundary
+   can no longer read as a sheet.
