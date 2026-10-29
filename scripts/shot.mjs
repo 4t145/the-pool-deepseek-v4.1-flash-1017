@@ -24,6 +24,7 @@ import {
   readStats,
   captureCanvas,
   renderAt,
+  ensureShot,
   startServer,
   totalErrors,
   waitForReady,
@@ -60,6 +61,7 @@ try {
       await waitForReady(page);
     }
     await prepareCapture(page, { letterbox });
+    await ensureShot(page, id);
     await renderAt(page, time, { frames: 0 });
     const stats = await readStats(page);
     const target = path.join(outDir, `${String(index + 1).padStart(2, '0')}-${id}.png`);

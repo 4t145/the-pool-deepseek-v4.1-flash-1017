@@ -184,6 +184,35 @@ export async function readStats(page) {
   return page.evaluate(() => window.__pool?.getStats() ?? null);
 }
 
+/**
+ * Fail-safe shot assertion. A navigation/capture race can leave the page in a
+ * different camera mode than requested (seen once during review captures), so
+ * every positioned capture snaps the requested shot and verifies the app state
+ * before a frame is taken. Retries a couple of times, then throws.
+ */
+export async function ensureShot(page, id) {
+  let last = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.evaluate((shotId) => {
+      window.__pool?.setShot(shotId);
+    }, id);
+    const stats = await readStats(page);
+    last = stats;
+    if (stats && stats.mode === 'shot' && stats.shot === id) return { stats, attempts: attempt };
+    await page.waitForTimeout(120);
+  }
+  throw new Error(`capture is not in shot mode for "${id}" (got mode=${last?.mode ?? '?'} shot=${last?.shot ?? '?'})`);
+}
+
+/** Fail-safe cinematic assertion for frame-stepped takes. */
+export async function ensureCinematic(page) {
+  const stats = await readStats(page);
+  if (!stats || stats.mode !== 'cinematic') {
+    throw new Error(`trailer capture is not in cinematic mode (got mode=${stats?.mode ?? '?'})`);
+  }
+  return stats;
+}
+
 /** Read the transform of every renderable object, for determinism evidence. */
 export async function readTransforms(page) {
   return page.evaluate(() => {

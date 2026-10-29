@@ -23,6 +23,7 @@ import {
   prepareCapture,
   captureCanvas,
   renderAt,
+  ensureCinematic,
   startServer,
   totalErrors,
 } from './lib/bench.mjs';
@@ -189,6 +190,7 @@ try {
     params: { capture: 1, quality, t: 0, hud: 0, letterbox: 1 },
   });
   await prepareCapture(page, { letterbox: true });
+  await ensureCinematic(page);
 
   const started = Date.now();
   let renderedFrames = 0;

@@ -26,6 +26,7 @@ import {
   prepareCapture,
   readStats,
   renderAt,
+  ensureShot,
   captureCanvas,
   startServer,
   totalErrors,
@@ -79,12 +80,14 @@ try {
       await waitForReady(page);
     }
     await prepareCapture(page, { letterbox: false });
+    const shotState = await ensureShot(page, id);
     await renderAt(page, time, { frames: 0 });
     const stats = await readStats(page);
+    const verified = stats?.mode === 'shot' && stats.shot === id;
     const target = path.join(outDir, `${String(index + 1).padStart(2, '0')}-${id}.png`);
     await captureCanvas(page, target, { format: 'png' });
     const hash = await sha256(target);
-    manifest.shots.push({ id, time, width, height, quality, sha256: hash, stats });
+    manifest.shots.push({ id, time, width, height, quality, verified, attempts: shotState.attempts, sha256: hash, stats });
     console.log(`[stills] ${String(index + 1).padStart(2, '0')} ${id.padEnd(9)} t=${time.toFixed(2)}s  ${formatStats(stats)}  -> ${path.relative(process.cwd(), target)}`);
   }
 
@@ -102,12 +105,24 @@ try {
       params: { shot: heroShot, capture: 1, quality, t: heroTime, hud: 0, letterbox: 0 },
     });
     await prepareCapture(hero.page, { letterbox: false });
+    const heroState = await ensureShot(hero.page, heroShot);
     await renderAt(hero.page, heroTime, { frames: 0 });
     const heroStats = await readStats(hero.page);
+    const heroVerified = heroStats?.mode === 'shot' && heroStats.shot === heroShot;
     const target = path.join(outDir, `hero-4k-${heroShot}.png`);
     await captureCanvas(hero.page, target, { format: 'png' });
     const hash = await sha256(target);
-    manifest.hero = { id: heroShot, time: heroTime, width: heroWidth, height: heroHeight, quality, sha256: hash, stats: heroStats };
+    manifest.hero = {
+      id: heroShot,
+      time: heroTime,
+      width: heroWidth,
+      height: heroHeight,
+      quality,
+      verified: heroVerified,
+      attempts: heroState.attempts,
+      sha256: hash,
+      stats: heroStats,
+    };
     console.log(
       `[stills] HERO ${heroShot} ${heroWidth}x${heroHeight} t=${heroTime.toFixed(2)}s  ${formatStats(heroStats)}  -> ${path.relative(process.cwd(), target)}`,
     );
