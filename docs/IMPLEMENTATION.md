@@ -515,10 +515,10 @@ These are real and deliberately not hidden with darkness, blur or letterbox:
 
 - **No TAA.** The scene target is MSAA 4× (2× on medium, none on low). Thin
   rails, ladder rungs and the flume lip can shimmer slightly during the fastest
-  camera transit; camera speed is capped at 1.78 m/s and the guide keeps its
-  calm windows. There is no chrome roughness/AA floor in the shipped materials
-  (that experiment was measured on the rail dashes and reverted because it did
-  not change them).
+  camera transit; the guided take peaks at 1.87 m/s (tested below 2.0 m/s) and
+  the guide keeps its calm windows. There is no chrome roughness/AA floor in the
+  shipped materials (that experiment was measured on the rail dashes and
+  reverted because it did not change them).
 - **Water is a screen-space/planar hybrid.** Reflection and refraction are
   reduced-resolution HDR targets (0.8×/0.68× at ultra); the reflection is
   slightly softened at distance by design. The refraction path solves the basin
