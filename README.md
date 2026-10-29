@@ -1,3 +1,5 @@
+made with `deepseek-v4.1-flash-1017` and [dsh-swarm](https://github.com/4t145/dsh-swarm)
+
 # THE POOL
 
 One flooded municipal pool hall, rendered in real time. White glazed tile, a long
@@ -145,3 +147,5 @@ and reads frames from the WebGL drawing buffer.
   independent systems stay aligned. The API is `renderAt`, `setShot`,
   `setCinematic`, `setPaused`, `setLetterbox`, `setHud`, `setExposure`,
   `setBloom`, `getStats`, plus `camera`, `scene`, `renderer` and `time()`.
+
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
