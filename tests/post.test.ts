@@ -3,7 +3,9 @@ import {
   aces,
   agx,
   BLOOM_KNEE,
+  BLOOM_MASK_LAYER,
   BLOOM_THRESHOLD,
+  isBloomEmitter,
   brightPass,
   chromaticOffsetUv,
   compositeDisplay,
@@ -210,5 +212,17 @@ describe('composite', () => {
     const lit = compositeDisplay(hdr, [1, 0.9, 0.8]);
     expect(lit[0]).toBeGreaterThan(dark[0]);
     expect(lit[1]).toBeGreaterThan(dark[1]);
+  });
+});
+
+describe('emissive bloom mask', () => {
+  it('only accepts light-emitting materials and honours explicit overrides', () => {
+    expect(isBloomEmitter({ toneMapped: false })).toBe(true);
+    expect(isBloomEmitter({ toneMapped: true })).toBe(false);
+    expect(isBloomEmitter({ toneMapped: true, userData: { bloom: true } })).toBe(true);
+    expect(isBloomEmitter({ toneMapped: false, userData: { bloom: false } })).toBe(false);
+    expect(isBloomEmitter({ toneMapped: false, userData: { bloom: true } })).toBe(true);
+    expect(isBloomEmitter({})).toBe(false);
+    expect(BLOOM_MASK_LAYER).toBe(1);
   });
 });

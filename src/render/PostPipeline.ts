@@ -25,6 +25,8 @@ import {
   GRAIN_AMOUNT,
   GRAIN_FRAME_RATE,
   GRADE_CONTRAST,
+  BLOOM_MASK_LAYER,
+  isBloomEmitter,
   GRADE_SATURATION,
   LETTERBOX_ASPECT,
   VIGNETTE_AMOUNT,
@@ -595,12 +597,8 @@ export class PostPipeline {
       const mesh = object as Mesh;
       if (!mesh.isMesh) return;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const emissive = materials.some((material) => {
-        if (!material) return false;
-        if (material.userData.bloom === true) return true;
-        return material.toneMapped === false && material.userData.bloom !== false;
-      });
-      if (emissive) mesh.layers.enable(1);
+      const emissive = materials.some((material) => (material ? isBloomEmitter(material) : false));
+      if (emissive) mesh.layers.enable(BLOOM_MASK_LAYER);
     });
   }
 
@@ -616,7 +614,7 @@ export class PostPipeline {
       renderer.setRenderTarget(target);
       renderer.clear(true, true, true);
       renderer.autoClear = false;
-      camera.layers.set(1);
+      camera.layers.set(BLOOM_MASK_LAYER);
       renderer.render(scene, camera);
     } finally {
       camera.layers.mask = previousLayerMask;

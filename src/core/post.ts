@@ -181,6 +181,28 @@ export function brightPass(rgb: Rgb, threshold = BLOOM_THRESHOLD, knee = BLOOM_K
   return [rgb[0] * contribution, rgb[1] * contribution, rgb[2] * contribution];
 }
 
+/** Camera layer used by the half-res emissive mask pass. */
+export const BLOOM_MASK_LAYER = 1;
+
+/**
+ * Emissive-mask classification for the bloom pass. A mesh contributes bloom
+ * only when it carries a light-emitting material: materials that opt out of
+ * tone mapping (`toneMapped: false`) or explicitly set `userData.bloom = true`;
+ * `userData.bloom = false` always wins so volumetric/additive surfaces can opt
+ * out. Kept pure so the render chain's containment rule is unit-tested.
+ */
+export interface BloomMaterialFlags {
+  toneMapped?: boolean;
+  userData?: { bloom?: boolean; [key: string]: unknown };
+}
+
+export function isBloomEmitter(material: BloomMaterialFlags): boolean {
+  const override = material.userData?.bloom;
+  if (override === true) return true;
+  if (override === false) return false;
+  return material.toneMapped === false;
+}
+
 /** Integer hash used by the deterministic grain/dither (stable across runs). */
 function hash3(x: number, y: number, z: number): number {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 2246822519);
