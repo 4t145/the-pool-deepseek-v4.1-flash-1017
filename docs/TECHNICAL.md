@@ -100,8 +100,12 @@ wrap takes the short way round and a target cannot swing through the eye);
 monotone tangents at direction reversals to prevent overshoot into walls. The
 loop is C1-continuous in position and orientation; `tests/camera.test.ts`
 asserts the seam, the translation/pan rate caps, the flume clearance and that
-every composition pose is visited exactly. `CINEMATIC_DURATION` is 56 s and the
-whole path is driven by the scene clock, so `renderAt(t)` stays deterministic.
+every composition pose is visited exactly. `CINEMATIC_DURATION` is 56 s; the
+composition beats are arrival 0 s, flume 6 s, ring 16 s, arch 21 s, tile 25.5 s,
+skylight 36.5 s, float 46.5 s, with one return key at 51 s. Segment times are
+paced against segment length so the whole take stays below 1.8 m/s peak
+translation and 13.3 deg/s peak pan (audit: `docs/evidence/camera-pacing.json`).
+The whole path is driven by the scene clock, so `renderAt(t)` stays deterministic.
 
 ## Water
 
