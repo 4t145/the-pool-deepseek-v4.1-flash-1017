@@ -1,13 +1,7 @@
-import {
-  CatmullRomCurve3,
-  Euler,
-  MathUtils,
-  PerspectiveCamera,
-  Quaternion,
-  Vector3,
-} from 'three';
+import { Euler, MathUtils, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { CINEMATIC_DURATION, CINEMATIC_KEYS, getShot, SHOTS, type CameraShot } from '../world/layout';
-import { easeInOutQuint, clamp, smoothstep } from '../core/math';
+import { easeInOutQuint, clamp } from '../core/math';
+import { createClosedCameraPath, type CameraPath } from './cameraPath';
 
 export type CameraMode = 'cinematic' | 'shot' | 'free';
 
@@ -25,25 +19,15 @@ interface Transition {
   duration: number;
 }
 
-const makeCurve = (points: readonly (readonly [number, number, number])[]): CatmullRomCurve3 =>
-  new CatmullRomCurve3(points.map((point) => new Vector3(...point)), false, 'catmullrom', 0.35);
-
-const fovAt = (time: number): number => {
-  for (let i = 0; i < CINEMATIC_KEYS.length - 1; i++) {
-    const a = CINEMATIC_KEYS[i]!;
-    const b = CINEMATIC_KEYS[i + 1]!;
-    if (time >= a.time && time <= b.time) {
-      const t = smoothstep(a.time, b.time, time);
-      return MathUtils.lerp(a.fov, b.fov, t);
-    }
-  }
-  return CINEMATIC_KEYS[CINEMATIC_KEYS.length - 1]!.fov;
-};
+/**
+ * Roll for the guided take. The period matches the loop so the wrap does not
+ * introduce a jump in the horizon; the amplitude is deliberately tiny (< 0.15°).
+ */
+const cinematicRoll = (time: number): number => Math.sin((time / CINEMATIC_DURATION) * Math.PI * 2) * 0.0025;
 
 export class Cinematics {
   private readonly camera: PerspectiveCamera;
-  private readonly positionCurve: CatmullRomCurve3;
-  private readonly targetCurve: CatmullRomCurve3;
+  private readonly path: CameraPath;
   private mode: CameraMode = 'cinematic';
   private transition: Transition | null = null;
   private current: ShotState;
@@ -63,8 +47,7 @@ export class Cinematics {
   constructor(camera: PerspectiveCamera, canvas: HTMLCanvasElement) {
     this.camera = camera;
     this.canvas = canvas;
-    this.positionCurve = makeCurve(CINEMATIC_KEYS.map((key) => key.position));
-    this.targetCurve = makeCurve(CINEMATIC_KEYS.map((key) => key.target));
+    this.path = createClosedCameraPath(CINEMATIC_KEYS, CINEMATIC_DURATION);
     const shot = SHOTS[0]!;
     this.current = {
       position: new Vector3(...shot.position),
@@ -203,12 +186,13 @@ export class Cinematics {
   }
 
   private sampleCinematic(time: number): void {
-    const t = clamp(time / CINEMATIC_DURATION, 0, 1);
-    const position = this.positionCurve.getPointAt(t);
-    const target = this.targetCurve.getPointAt(t);
-    const fov = fovAt(time);
-    const roll = Math.sin(time * 0.17) * 0.0025;
-    this.current = { position, target, fov, roll };
+    const pose = this.path.sample(time);
+    this.current = {
+      position: new Vector3(pose.position[0], pose.position[1], pose.position[2]),
+      target: new Vector3(pose.target[0], pose.target[1], pose.target[2]),
+      fov: pose.fov,
+      roll: cinematicRoll(time),
+    };
     this.apply(this.current, true);
   }
 
