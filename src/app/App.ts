@@ -14,7 +14,7 @@ import { Cinematics } from './cinematics';
 import { buildArchitecture } from '../world/architecture';
 import { buildProps } from '../world/props';
 import { buildLighting } from '../world/lighting';
-import { buildWater } from '../world/water';
+import { buildUnderwaterCaustics, buildWater } from '../world/water';
 import { createMaterials } from '../world/materials';
 import {
   createSignTexture,
@@ -39,6 +39,7 @@ export class App {
   private post: PostPipeline | null = null;
   private cinematics: Cinematics | null = null;
   private water: ReturnType<typeof buildWater> | null = null;
+  private caustics: ReturnType<typeof buildUnderwaterCaustics> | null = null;
   private lighting: ReturnType<typeof buildLighting> | null = null;
   private props: ReturnType<typeof buildProps> | null = null;
   private tiles: TileTextureSet | null = null;
@@ -117,6 +118,15 @@ export class App {
       signNoDiving,
       signDepth,
     });
+
+    // Underwater caustics are procedural (no texture, no bake). They are patched
+    // into the lit materials before the room is built so the same lighting pass,
+    // the refraction prepass and the planar reflection all see them.
+    this.caustics = buildUnderwaterCaustics();
+    this.caustics.apply(materials.tileUnderwater, { strength: 1.7, scale: 1.0 });
+    this.caustics.apply(materials.tileFloor, { strength: 1.1, scale: 1.0 });
+    this.caustics.apply(materials.poolTileBand, { strength: 1.0, scale: 1.15 });
+    this.caustics.apply(materials.redPlastic, { strength: 0.7, scale: 1.3 });
     await yieldToPaint();
 
     this.setLoading('BUILDING THE BASIN', 0.52);
@@ -125,6 +135,11 @@ export class App {
 
     this.setLoading('INSTALLING THE FLUME', 0.64);
     this.props = buildProps(this.scene, materials);
+    // The flume uses its own cloned PVC + liner materials; register the caustics
+    // hook on those as well so the submerged tube is lit like the basin tile.
+    for (const material of this.props.causticTargets) {
+      this.caustics?.apply(material, { strength: 0.45, scale: 1.3 });
+    }
     await yieldToPaint();
 
     this.setLoading('BAKING THE OVERCAST', 0.72);
@@ -208,7 +223,9 @@ export class App {
     this.cinematics.update(dt, time);
     this.props.update(time);
     this.lighting.update(time);
+    this.caustics?.update(time);
     this.water.update(time, this.camera);
+    this.water.renderRefraction(this.renderer, this.scene, this.camera);
     this.water.renderReflection(this.renderer, this.scene, this.camera);
     this.renderer.info.reset();
     this.post.render(this.scene, this.camera, time);
