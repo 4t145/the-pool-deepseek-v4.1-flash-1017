@@ -13,10 +13,13 @@ export const TRAILER_DEFAULTS = Object.freeze({
   height: 1080,
   fps: 24,
   crossfade: 0.6,
+  // Guided-take windows (see docs/evidence/camera-pacing.json): establishing
+  // flume pass, ring/arch water stretch, ascension/float. 8 s each with 0.6 s
+  // dissolves = 22.8 s, inside the 20-30 s acceptance window.
   segments: [
     { start: 0.0, duration: 8.0 },
-    { start: 14.0, duration: 8.0 },
-    { start: 33.0, duration: 8.0 },
+    { start: 18.0, duration: 8.0 },
+    { start: 36.5, duration: 8.0 },
   ],
 });
 
