@@ -328,16 +328,20 @@ half-scale reflection target), which removed a reflection-side dash class.
   algae and a mineral scale line) and a tileable orange-peel normal; the two
   flume materials are exposed as `causticTargets` so the caustic patcher can
   reach them. The tower rises from the basin floor with a red boarding platform,
-  funnel and guard rail; welded chrome collars, struts and clamps hold the helix
-  off the merged chrome batch. The platform crown sits above the arrival/flume
-  frame top by design and only reads in float and the guided take. Merging the
-  props chrome took the props system from ~159 to ~15 draw calls.
-- **Rings**: inflated vinyl torus flattened 0.58, thicker than the baseline,
-  with moulded seams along both equators and a valve patch/cap. The print is a
-  generated vinyl texture (printed bands, scuffs, seam darkening), not a
-  separate plastic material band. Each ring has a deterministic float pose
-  (bob, yaw, tilt) and sits so the waterline cuts the tube; reflections come
-  from the water system.
+  funnel and guard rail; welded chrome collars, struts and clamps are merged
+  into the single chrome batch. The flume shot is reframed to include the whole
+  hero structure (mouth through platform crown); the arrival shot still crops
+  the crown by design. Merging the props chrome took the props system from ~159
+  to ~15 draw calls.
+- **Rings**: inflated vinyl torus flattened 0.58, thicker than the baseline.
+  The mould seam is printed into the vinyl texture (a soft dark band at the
+  torus UV seam and a faint line at the inner equator); the 5 mm geometric seam
+  tori were removed after the owner rev-1 pass because they aliased into a dark
+  dotted line on the rims at 1080p. Valve hardware and cap are separate merged
+  geometry. The print is a generated vinyl texture (printed bands, scuffs, seam
+  darkening), not a separate plastic material band. Each ring has a
+  deterministic float pose (bob, yaw, tilt) and sits so the waterline cuts the
+  tube; reflections come from the water system.
 - **Ladders/rails**: railing spans are cadenced around the ladder bays and
   terminate on the deck with flanges; ladder rails enter the water and stop ~1 m
   below, grab handles rise over the coping and land on deck flange plates. All
