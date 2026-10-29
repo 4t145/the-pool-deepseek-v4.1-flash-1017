@@ -86,7 +86,7 @@ const EMITTER_TRANSMISSION: Record<number, number> = {
 };
 
 /** Mean texture reflectance for materials whose albedo map is not sampled on the CPU. */
-const MAP_ALBEDO_MEAN = 0.8;
+const MAP_ALBEDO_MEAN = 0.75;
 const INV_PI = 1 / Math.PI;
 const FOUR_PI = 4 * Math.PI;
 
