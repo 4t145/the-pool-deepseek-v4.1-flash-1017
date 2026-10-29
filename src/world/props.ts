@@ -38,6 +38,13 @@ import { clamp } from '../core/math';
 
 export interface PropsSystem {
   group: Group;
+  /**
+   * Cloned flume materials (they replace the shared red PVC), exposed so the
+   * water caustics pass can patch them. `materials.redPlastic` itself is no
+   * longer used by the flume, so caustics applied to that library material
+   * would never reach these meshes.
+   */
+  causticTargets: readonly Material[];
   update(time: number): void;
 }
 
@@ -140,7 +147,8 @@ function applyCylindricalUVs(geometry: BufferGeometry, centerX: number, centerZ:
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i) - centerX;
     const z = position.getZ(i) - centerZ;
-    const angle = Math.atan2(z, x);
+    let angle = Math.atan2(z, x);
+    if (angle < 0) angle += Math.PI * 2;
     uvs[i * 2] = angle * radius;
     uvs[i * 2 + 1] = position.getY(i);
   }
@@ -342,13 +350,13 @@ function createFlumePvcMaterial(base: MeshPhysicalMaterial, grime: Texture, peel
         `#include <color_fragment>
         float propY = vPropWorld.y - uWaterline;
         // Wet band just above the waterline, plus a sharp historic tide mark.
-        float wetBand = smoothstep(0.7, 0.05, propY);
-        float tide = exp(-pow((propY - 0.33) / 0.06, 2.0));
+        float wetBand = smoothstep(1.2, 0.1, propY);
+        float tide = exp(-pow((propY - 0.85) / 0.055, 2.0));
         float algae = smoothstep(0.3, -0.05, propY);
         float streakA = texture2D(uGrime, vec2((vPropWorld.x + vPropWorld.z) * 0.22, propY * 0.052 + 0.17)).r;
         float streakB = texture2D(uGrime, vec2((vPropWorld.x - vPropWorld.z) * 0.09 + 0.41, propY * 0.017 + 0.63)).r;
-        float streak = smoothstep(0.46, 0.84, streakA * 0.62 + streakB * 0.48);
-        float grime = clamp(wetBand * (0.26 + 0.54 * streak) + tide * 0.55 + algae * 0.3, 0.0, 1.0);
+        float streak = smoothstep(0.40, 0.80, streakA * 0.62 + streakB * 0.48);
+        float grime = clamp(wetBand * (0.3 + 0.55 * streak) + tide * 0.6 + algae * 0.35, 0.0, 1.0);
         vec3 stain = mix(diffuseColor.rgb, vec3(0.062, 0.074, 0.047), grime * 0.82);
         stain = mix(stain, stain * vec3(0.74, 0.94, 0.68), algae * 0.42);
         // A pale mineral scale line where splash water has dried for years.
@@ -375,9 +383,9 @@ function createFlumeLinerMaterial(base: MeshPhysicalMaterial): MeshPhysicalMater
   material.side = BackSide;
   material.color = new Color(0x6a1c14);
   material.emissive = new Color(0x140604);
-  material.roughness = 0.46;
-  material.clearcoat = 0.7;
-  material.clearcoatRoughness = 0.2;
+  material.roughness = 0.52;
+  material.clearcoat = 0.4;
+  material.clearcoatRoughness = 0.32;
   material.metalness = 0;
   // The liner's UV.x runs along the tube (1 = the open mouth). Fade the inner
   // wall to black over the last ~0.7 m so the throat reads as depth instead of
@@ -410,7 +418,11 @@ function createFlumeLinerMaterial(base: MeshPhysicalMaterial): MeshPhysicalMater
  * red boarding platform; a closed PVC corkscrew wraps it and dives to a
  * half-submerged mouth aimed at the camera.
  */
-function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: GeometryBatch): Group {
+function buildFlume(
+  materials: MaterialLibrary,
+  grime: Texture,
+  chrome: GeometryBatch,
+): { group: Group; causticTargets: Material[] } {
   const S = LAYOUT.slide;
   const group = new Group();
   group.name = 'slide';
@@ -487,10 +499,8 @@ function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: Geometry
   const pvcMesh = pvcBatch.build(pvcMaterial, 'slide.flume', group);
   if (pvcMesh) pvcMesh.castShadow = true;
 
-  const liner = new Mesh(
-    new TubeGeometry(curve, 220, tubeRadius - 0.055, 22, false),
-    createFlumeLinerMaterial(materials.redPlastic),
-  );
+  const linerMaterial = createFlumeLinerMaterial(materials.redPlastic);
+  const liner = new Mesh(new TubeGeometry(curve, 220, tubeRadius - 0.055, 22, false), linerMaterial);
   liner.name = 'slide.liner';
   liner.castShadow = false;
   group.add(liner);
@@ -569,7 +579,7 @@ function buildFlume(materials: MaterialLibrary, grime: Texture, chrome: Geometry
     chrome.addTransformed(clampRing, point, clampQuaternion);
   }
 
-  return group;
+  return { group, causticTargets: [pvcMaterial, linerMaterial] };
 }
 
 // ---------------------------------------------------------------------------
@@ -726,7 +736,8 @@ export function buildProps(scene: Scene, materials: MaterialLibrary): PropsSyste
   const grime = createFlumeGrimeTexture();
   const chrome = new GeometryBatch();
 
-  group.add(buildFlume(materials, grime, chrome));
+  const flume = buildFlume(materials, grime, chrome);
+  group.add(flume.group);
   group.add(buildRailings(chrome));
   group.add(buildLadders(chrome));
   chrome.build(materials.chrome, 'props.chrome', group);
@@ -738,6 +749,7 @@ export function buildProps(scene: Scene, materials: MaterialLibrary): PropsSyste
 
   return {
     group,
+    causticTargets: flume.causticTargets,
     update(time: number) {
       for (const ring of rings) {
         const pose = ringFloatPose(time, ring.phase, ring.tube, ring.flatten);
