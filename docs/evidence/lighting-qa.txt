@@ -1,0 +1,77 @@
+Lighting integration QA — worker w1
+===================================
+
+Commit under test: c2bc4d65 (lighting bake accepted) merged into w1 branch.
+Headless->headed Chrome on DISPLAY=:0 (NVIDIA RTX 3060), 1920x1080 / 3840x2160,
+quality=ultra, capture mode, arrival shot at scene time t=2.
+
+1. Determinism (acceptance B3)
+   Two renderAt(2) captures, 400 ms apart, same page session:
+     md5 9ef8327dbb644fbcf1e65f161137e9f2  /tmp/w1-det-a.png
+     md5 9ef8327dbb644fbcf1e65f161137e9f2  /tmp/w1-det-b.png
+     ffmpeg psnr: average:inf min:inf max:inf (pixel identical)
+   Scene-graph transform audit: 373 meshes hashed, all static world matrices
+   identical between calls. The bake itself is deterministic: seeded sample
+   rotation, no Math.random and no wall clock in any visual system.
+
+2. Shot-mode performance (acceptance B4)
+   arrival shot live for 4.5 s, 1920x1080, ultra:
+     fps 121.9, draw calls 358, triangles 105,466, mode=shot, no page errors.
+   Bake cost (one time, logged at load): 5832 probes 18x9x36, N=48,
+   279,936 primary + 122,619 shadow rays, 3 bounces, 58,265 tris / 509 meshes,
+   ~1.0-1.1 s. Zero per-frame ray cost.
+
+3. 4K inspection (acceptance A1/A2/A5, art direction "no banding")
+   3840x2160 arrival still opened at 100% in three crops (docs/evidence/
+   lighting-arrival-4k.jpg):
+     - no L2 probe-grid faceting or 1 m blotching in the ceiling or fog
+       gradients; no banding in the warm corridor falloff;
+     - skylight/window highlights keep mullion + frost structure, no flat
+       white core; no blown centre blob;
+     - warm far arch reads as layered depth with a lit doorway, frame and pipe
+       silhouettes.
+   Observed but not in w1's lane: small white specular pixel clusters on the
+   tile around the window piers at 4K (present with w1 dust disabled, so it is
+   a tile-material sparkle, reported to w4).
+
+4. Volumetric attribution (w2 review: "hard straight-edged wedge")
+   A/B captures of the arch shot with volumetric intensity 1 vs 0
+   (docs/evidence/lighting-volumetrics-ab-720.jpg): the hard straight diagonal
+   boundary across the far arch wall is present in both; it is the direct sun
+   bar through the skylight aperture, not the shaft cards. w1 then softened the
+   sun penumbra (shadow radius 2.2 -> 5.5, since r186 removed PCFSoftShadowMap)
+   and re-captured: docs/evidence/lighting-sunbar-softening-720.jpg. Shaft cards
+   were also given a parabolic lateral falloff + wobble so their quad boundary
+   can no longer read as a sheet.
+
+5. Review follow-ups (w2, w5)
+   - "Dust motes render as square points" near the arch: A/B on the same 1920x1080
+     frame with the dust Points material intensity forced to 0 AND the shaft mesh
+     hidden (docs/evidence/lighting-arch-dust-ab.jpg, left = on, right = off).
+     The white square clusters are identical in both frames, so they are the tile
+     specular sparkle (reported to w4), not lighting volumetrics. w1 also hardened
+     the dust anyway: distance fade at 7-17 m (no 1 px dots), 2.6 px size cap,
+     gl_PointCoord radial falloff.
+   - "Far corridor glow reads white-hot": doorway emissive peak 2.7 -> 1.85 and
+     hue 0xffb26b -> 0xff9d4c, corridor lamp 46 -> 38 cd at 0xff8f3f, haze colour
+     warmed. docs/evidence/lighting-arch-amber-1080.jpg shows the amber depth.
+   - "Sun bar still a cut edge": shadow radius 5.5 -> 8.0 (r186 PCF penumbra);
+     the arch still shows the same diagonal, now with a gradual edge.
+
+6. IBL double-count repair (w4 finding 890302d7, fixed here)
+   three r186 WebGLRenderer.setProgram line ~2738 overwrites the envMapIntensity
+   uniform with scene.environmentIntensity whenever material.envMap === null and
+   scene.environment is set, and refreshUniformsStandard/Physical only read
+   material.envMapIntensity when material.envMap is truthy. The first version of
+   applyIblResponse therefore scaled a value the renderer ignored: a silent no-op
+   and a real diffuse double count with the probe grid.
+   Fix: pin scene.environment onto each standard/physical material
+   (material.envMap = environment) before setting the intensity, then set
+     metal:               0.8  (= scene.environmentIntensity, current look kept)
+     clearcoat dielectric: 0.8 * 0.8  = 0.64
+     matte dielectric:     0.8 * 0.42 = 0.336
+   Verified in-page: 339/339 standard materials have envMap assigned; intensity
+   set is {0.336, 0.64, 0.8}. A/B vs the old (ignored-intensity) behavior on the
+   same session: mean display YAVG 107.895 fixed vs 111.054 old, i.e. the frame
+   is ~3 % darker overall, with the tile clearcoat IBL cut 20 % and matte walls
+   58 %. Side-by-side committed as docs/evidence/lighting-ibl-fix-720.jpg.

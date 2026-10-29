@@ -126,9 +126,28 @@ function fallbackEnvironment(renderer: WebGLRenderer): Texture {
  * The baked probe grid now supplies the room's directional diffuse bounce, so
  * the IBL's own diffuse contribution would double-count it. Keep the env map
  * (chrome needs the window/skylight reflections) but attenuate it on dielectric
- * materials only; metals keep their authored response.
+ * materials only; metals keep the current effective response.
+ *
+ * Clearcoat materials (glazed tile, the red PVC) are treated more gently: their
+ * bevel catch-light is almost entirely IBL specular, so a heavy attenuation
+ * flattens the glaze. They get a lighter factor that keeps the thin specular
+ * line while still cutting most of the duplicate diffuse.
+ *
+ * IMPORTANT (three r186): `WebGLRenderer.setProgram` overwrites the
+ * `envMapIntensity` uniform with `scene.environmentIntensity` whenever
+ * `material.envMap === null` and `scene.environment` is set, and
+ * `refreshUniformsStandard/Physical` only read `material.envMapIntensity` when
+ * `material.envMap` is truthy. So the per-material scale below only works if the
+ * environment is pinned onto each material first; otherwise the whole function
+ * is a silent no-op.
  */
-function attenuateDielectricIbl(scene: Scene, factor: number): void {
+function applyIblResponse(
+  scene: Scene,
+  environment: Texture | null,
+  baseIntensity: number,
+  matteFactor: number,
+  clearcoatFactor: number,
+): void {
   const patched = new Set<MeshStandardMaterial>();
   scene.traverse((object) => {
     const mesh = object as Mesh;
@@ -138,8 +157,12 @@ function attenuateDielectricIbl(scene: Scene, factor: number): void {
     if (!(material instanceof MeshStandardMaterial) && !(material instanceof MeshPhysicalMaterial)) return;
     if (patched.has(material)) return;
     patched.add(material);
-    if (material.metalness > 0.6) return;
-    material.envMapIntensity *= factor;
+    // Pin the environment so three honours the per-material intensity below.
+    if (environment) material.envMap = environment;
+    const clearcoat = (material as MeshPhysicalMaterial).clearcoat ?? 0;
+    const isMetal = material.metalness > 0.6;
+    const factor = isMetal ? 1 : clearcoat > 0.2 ? clearcoatFactor : matteFactor;
+    material.envMapIntensity = baseIntensity * factor;
     material.needsUpdate = true;
   });
 }
@@ -171,7 +194,9 @@ export function buildLighting(options: LightingOptions): Lighting {
   sun.shadow.camera.far = 70;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.035;
-  sun.shadow.radius = 2.2;
+  // three.js r186 removed PCFSoftShadowMap; PCF's radius is the penumbra control.
+  // The art direction asks for long soft bars, not a hard noon shadow edge.
+  sun.shadow.radius = 8;
   scene.add(sun);
   scene.add(sun.target);
   const sunDirection = sun.position.clone().sub(sun.target.position).normalize();
@@ -207,7 +232,7 @@ export function buildLighting(options: LightingOptions): Lighting {
 
   // One warm lamp deep inside the corridor: it lights the tiled side walls so the
   // arch reads as a lit space, while the doorway plane supplies the warm depth.
-  const corridorLight = new PointLight(0xff9a4d, 46, 26, 2);
+  const corridorLight = new PointLight(0xff8f3f, 38, 26, 2);
   corridorLight.position.set(LAYOUT.floodLight.position.x, 2.6, LAYOUT.hall.zMax + 4.6);
   scene.add(corridorLight);
   pointLights.push(corridorLight);
@@ -243,7 +268,7 @@ export function buildLighting(options: LightingOptions): Lighting {
       seed: 0x51ff,
     });
     scene.add(probes.volume);
-    attenuateDielectricIbl(scene, 0.42);
+    applyIblResponse(scene, environment, 0.8, 0.42, 0.8);
     const stats = probes.stats;
     console.info(
       `[pool] probe bake: ${stats.probes} probes ${stats.gridDims.join('x')}, N=${stats.samplesPerProbe}, ` +
