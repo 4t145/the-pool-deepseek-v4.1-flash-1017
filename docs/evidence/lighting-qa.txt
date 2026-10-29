@@ -90,3 +90,29 @@ quality=ultra, capture mode, arrival shot at scene time t=2.
      arch     after  mean 0.459 p50 0.482 p90 0.663 p95 0.737 p99 0.886
    -> midtones -4 to -6 %, highlights held (p99 unchanged, 0.00 % clipped), which
    is the intended single correction before w8's grade pass.
+
+8. Owner rev-1 AC#4 - water reflection kernel AA
+   Root cause (reproduced by w1, w2, w3, w8): the planar-reflection target is
+   0.8 scale and reflectionColor() sampled it with blur = mix(0.25, 1.25,
+   dist/46) texels in a 5-tap cross; sub-texel at near range, so thin bright
+   geometry (rails, ladder rungs, the flume waterline) broke into dashed black
+   strokes in the reflection. uTexel was also set from the drawing-buffer size
+   rather than reflectionTarget.width/height, making the kernel 20 % narrower
+   than intended.
+   Fix (water.ts only): blur = mix(0.95, 2.1, dist/46) with a 9-tap cross
+   (centre 0.28, four axis 0.11, four diagonal 0.07) and uTexel refreshed from
+   the reflection target each frame in renderReflection(). No new draw calls.
+   A/B on the same frame (arrival 1920x1080 t=2, before/after):
+     mean 0.352 / p50 0.341 -> mean 0.352 / p50 0.337, p90-p99 identical,
+     0.00 % clipped, so this is an AA change only.
+   Evidence: docs/evidence/rev1-reflection-aa-ab-1080.jpg (top before, bottom
+   after, nearest-neighbour crop). The dashes along the flume waterline become
+   low-contrast strokes instead of black dashes; planar reflection keeps its
+   room/skylight structure, no ghosting.
+   Negative tests performed to attribute the remaining dark strokes in the ring
+   shot: shadows off (castShadow=false on the sun) leaves them identical; w2's
+   chrome roughness-AA variant leaves them identical; water reflection strength
+   0 removes the water-side dashes. The remaining strokes sit on the dry wall
+   above the waterline at the pier positions and match w7's high-level
+   ventilation-grille slats (darkMetal), i.e. intended static detail, not a
+   specular artifact. Flagged to w7 rather than "fixed".
