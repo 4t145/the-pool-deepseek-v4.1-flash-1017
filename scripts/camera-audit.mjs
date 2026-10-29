@@ -12,7 +12,10 @@
  * - clipping: camera stays inside the hall with a margin and away from the
  *   columns / stair block;
  * - each of the seven shots: the sampled camera matches the authoritative
- *   LAYOUT pose and fov and stays inside the room;
+ *   LAYOUT pose and fov, stays inside the room, and the owner-required framing
+ *   anchors are inside the frame (wall tile + waterline for `tile`, the whole
+ *   hero structure for `flume`, the whole rim for `ring`, the far arch for
+ *   `arrival`); `--framing=off` disables those checks;
  * - slowest window scan: the calmest N-second windows of the take, which is what
  *   a trailer cut should be built from.
  *
@@ -22,6 +25,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { PerspectiveCamera, Vector3 } from 'three';
 import { CINEMATIC_DURATION, CINEMATIC_KEYS, LAYOUT, SHOTS } from '../src/world/layout.ts';
 import {
   closeServer,
@@ -43,6 +47,8 @@ const WARN_LINEAR_SPEED = args.number('max-speed', 1.6); // m/s
 const WARN_ANGULAR_SPEED = args.number('max-turn', 22); // deg/s
 const WARN_ACCELERATION = args.number('max-accel', 6); // m/s^2
 const SEAM_EPSILON = 0.001; // seconds
+const aspect = args.number('aspect', 16 / 9);
+const checkFraming = args.option('framing', 'on') !== 'off';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const length = (v) => Math.hypot(v[0], v[1], v[2]);
@@ -60,6 +66,97 @@ const percentile = (values, p) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))];
 };
+
+/**
+ * Projection helper for framing checks: build the sampled camera pose and
+ * project world anchors into NDC. Edge-touching (|x| or |y| > 0.98) counts as
+ * outside so a subject cut by the frame fails.
+ */
+function makeProjector(sample, frameAspect) {
+  const camera = new PerspectiveCamera(sample.fov, frameAspect, 0.05, 140);
+  camera.position.set(...sample.position);
+  camera.quaternion.set(...sample.quaternion);
+  camera.updateMatrixWorld(true);
+  camera.updateProjectionMatrix();
+  const point = new Vector3();
+  return (anchor) => {
+    point.set(anchor[0], anchor[1], anchor[2]).project(camera);
+    return {
+      x: Number(point.x.toFixed(2)),
+      y: Number(point.y.toFixed(2)),
+      inside: Math.abs(point.x) <= 0.98 && Math.abs(point.y) <= 0.98 && point.z < 1,
+    };
+  };
+}
+
+/**
+ * Owner-required framing anchors. These encode the composition intent in
+ * docs/ART_DIRECTION.md section 5 plus the art-direction correction goal: the
+ * Skin frame must contain wall tile/grout/waterline, the Flume frame the whole
+ * hero structure, and the Still Water frame the whole ring. Groups need
+ * `minInside` anchors inside the frame to pass.
+ */
+function framingChecks(shot, sample, frameAspect) {
+  const project = makeProjector(sample, frameAspect);
+  const wallX = LAYOUT.hall.halfWidth;
+  const basinX = LAYOUT.water.halfWidth - 0.004;
+  const z = shot.position[2];
+  const checks = [];
+  const group = (label, anchors, minInside) => {
+    const projected = anchors.map((anchor) => ({ label: anchor.label, ndc: project(anchor.point) }));
+    const insideCount = projected.filter((entry) => entry.ndc.inside).length;
+    checks.push({
+      label,
+      minInside,
+      inside: insideCount,
+      ok: insideCount >= minInside,
+      misses: projected.filter((entry) => !entry.ndc.inside).slice(0, 4),
+    });
+  };
+
+  if (shot.id === 'tile') {
+    const wall = [];
+    for (const y of [0.5, 0.75, 1.05, 1.45]) {
+      for (const dz of [-1.2, 0, 1.2]) wall.push({ label: `wall y=${y} z+${dz}`, point: [wallX, y, z + dz] });
+    }
+    group('wall tile + grout', wall, 6);
+    group(
+      'basin waterline band',
+      [-1, 0, 1].map((dz) => ({ label: `waterline z+${dz}`, point: [basinX, 0, z + dz] })),
+      1,
+    );
+  } else if (shot.id === 'flume') {
+    const slide = LAYOUT.slide;
+    group(
+      'whole hero flume',
+      [
+        { label: 'mouth', point: [slide.end.x, slide.end.y, slide.end.z] },
+        { label: 'platform', point: [slide.tower.x, slide.platformY, slide.tower.z] },
+        { label: 'crown', point: [slide.tower.x, slide.topY, slide.tower.z] },
+        { label: 'tower base', point: [slide.tower.x, LAYOUT.hall.deck, slide.tower.z] },
+      ],
+      4,
+    );
+  } else if (shot.id === 'ring') {
+    const ring = LAYOUT.rings.find((candidate) => candidate.id === 'red');
+    const rim = [];
+    for (let index = 0; index < 16; index++) {
+      const angle = (index / 16) * Math.PI * 2;
+      rim.push({
+        label: `rim ${index}`,
+        point: [
+          ring.position.x + Math.cos(angle) * (ring.radius + ring.tube),
+          ring.position.y + 0.06,
+          ring.position.z + Math.sin(angle) * (ring.radius + ring.tube),
+        ],
+      });
+    }
+    group('whole red ring', rim, 16);
+  } else if (shot.id === 'arrival') {
+    group('far arch on poster line', [{ label: 'far arch', point: [0, LAYOUT.farArch.springY - 0.6, LAYOUT.farArch.z - 0.05] }], 1);
+  }
+  return checks;
+}
 
 const { server, url } = await startServer(process.cwd());
 const browser = await launchBrowser();
@@ -255,17 +352,37 @@ try {
       const round = (value) => Math.round(value * 1e7) / 1e7;
       return {
         position: api.camera.position.toArray().map(round),
+        quaternion: api.camera.quaternion.toArray().map(round),
         fov: round(api.camera.fov),
       };
     }, shot.id);
     const poseError = distance(sample.position, [...shot.position]);
     const fovError = Math.abs(sample.fov - shot.fov);
     const insideHall = inside(sample.position);
-    report.shots.push({ id: shot.id, label: shot.label, position: sample.position, fov: sample.fov, poseError, fovError, insideHall });
+    const framing = checkFraming ? framingChecks(shot, sample, aspect) : [];
+    report.shots.push({
+      id: shot.id,
+      label: shot.label,
+      position: sample.position,
+      fov: sample.fov,
+      poseError,
+      fovError,
+      insideHall,
+      framing,
+    });
     if (poseError > 0.002) hardFailures.push(`shot ${shot.id} camera is ${poseError.toFixed(3)} m from its LAYOUT pose`);
     if (fovError > 0.01) hardFailures.push(`shot ${shot.id} fov ${sample.fov} != LAYOUT ${shot.fov}`);
     if (!insideHall) hardFailures.push(`shot ${shot.id} camera is outside the hall at ${sample.position.join(', ')}`);
-    console.log(`[camera] shot ${shot.id.padEnd(9)} pose error ${poseError.toFixed(4)} m · fov ${sample.fov.toFixed(1)} · inside hall ${insideHall}`);
+    for (const check of framing) {
+      if (check.ok) continue;
+      const misses = check.misses.map((miss) => `${miss.label} (${miss.ndc.x},${miss.ndc.y})`).join(', ');
+      hardFailures.push(`shot ${shot.id} framing "${check.label}": only ${check.inside}/${check.minInside} anchors in frame [${misses}]`);
+    }
+    const framingSummary = framing.map((check) => `${check.label} ${check.inside}/${check.minInside}${check.ok ? '' : ' MISS'}`).join(' · ');
+    console.log(
+      `[camera] shot ${shot.id.padEnd(9)} pose error ${poseError.toFixed(4)} m · fov ${sample.fov.toFixed(1)} · inside hall ${insideHall}` +
+        (framing.length > 0 ? ` · framing: ${framingSummary}` : ''),
+    );
   }
 
   const sceneErrors = totalErrors(errors);
