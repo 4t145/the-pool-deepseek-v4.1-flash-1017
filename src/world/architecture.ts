@@ -21,6 +21,7 @@ import {
 import { LAYOUT } from './layout';
 import { addStaticMesh, applyWorldUVs, wallPlane, worldBox } from './geometry';
 import type { MaterialLibrary } from './materials';
+import { buildRoomDetail, type RoomDetail } from './architectureDetail';
 
 interface ArchOpening {
   cx: number;
@@ -63,6 +64,7 @@ function flatShape(shape: Shape, curveSegments = 28): BufferGeometry {
 export interface Architecture {
   group: Group;
   occluders: Mesh[];
+  detail: RoomDetail;
 }
 
 /**
@@ -472,11 +474,15 @@ export function buildArchitecture(scene: Scene, materials: MaterialLibrary): Arc
   });
   add(spill, spillMaterial, 'far.spill', { castShadow: false, receiveShadow: false });
 
+  // Deck hardware, pool markings, wall lamps, ceiling services and notices.
+  // Merged per material and static, so the lighting bake can treat it as fabric.
+  const detail = buildRoomDetail(group, materials);
+
   group.traverse((object) => {
     if ((object as Mesh).isMesh) {
       object.frustumCulled = true;
     }
   });
 
-  return { group, occluders };
+  return { group, occluders, detail };
 }
