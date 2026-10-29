@@ -66,8 +66,9 @@ between stages so the loader can paint:
    joints, lane markings, bulkhead lamps, ceiling services, grilles, hatch,
    waterline band).
 6. **Props** — the corkscrew flume (tiled column, platform, funnel, closed PVC
-   helix, hollow liner/lip, chrome A-frames), three printed vinyl rings, merged
-   ladders and guardrails. Exposes `causticTargets` for the flume material.
+   helix, hollow liner/lip, welded chrome collars and struts), three printed
+   vinyl rings, merged ladders and guardrails. Exposes `causticTargets` for the
+   flume material.
 7. **Caustics wiring** — after props exist, the two flume materials are added to
    the caustic patcher.
 8. **Lighting** — sun + area lights + fluorescent points + warm corridor light,
@@ -75,7 +76,9 @@ between stages so the loader can paint:
    - **IBL bake**: a `CubeCamera` captures the real lit room into a PMREM
      environment (specular response for chrome/water/wet tile);
    - **probe-grid bake**: a BVH of the built room is ray traced into a 3D
-     irradiance + AO probe volume (see §8).
+     irradiance probe volume (nine SH coefficients; occlusion is implicit in
+     the radiance field plus the 0.3 m contact accent — there is no separate AO
+     channel). See §8.
    Then the volumetric shaft cards + dust cloud are built. Shadows freeze after
    frame 3.
 9. **Water** — reflection and refraction render targets, water normals and the
@@ -328,16 +331,20 @@ half-scale reflection target), which removed a reflection-side dash class.
   algae and a mineral scale line) and a tileable orange-peel normal; the two
   flume materials are exposed as `causticTargets` so the caustic patcher can
   reach them. The tower rises from the basin floor with a red boarding platform,
-  funnel and guard rail; welded chrome collars, struts and clamps hold the helix
-  off the merged chrome batch. The platform crown sits above the arrival/flume
-  frame top by design and only reads in float and the guided take. Merging the
-  props chrome took the props system from ~159 to ~15 draw calls.
-- **Rings**: inflated vinyl torus flattened 0.58, thicker than the baseline,
-  with moulded seams along both equators and a valve patch/cap. The print is a
-  generated vinyl texture (printed bands, scuffs, seam darkening), not a
-  separate plastic material band. Each ring has a deterministic float pose
-  (bob, yaw, tilt) and sits so the waterline cuts the tube; reflections come
-  from the water system.
+  funnel and guard rail; welded chrome collars, struts and clamps are merged
+  into the single chrome batch. The flume shot is reframed to include the whole
+  hero structure (mouth through platform crown); the arrival shot still crops
+  the crown by design. Merging the props chrome took the props system from ~159
+  to ~15 draw calls.
+- **Rings**: inflated vinyl torus flattened 0.58, thicker than the baseline.
+  The mould seam is printed into the vinyl texture (a soft dark band at the
+  torus UV seam and a faint line at the inner equator); the 5 mm geometric seam
+  tori were removed after the owner rev-1 pass because they aliased into a dark
+  dotted line on the rims at 1080p. Valve hardware and cap are separate merged
+  geometry. The print is a generated vinyl texture (printed bands, scuffs, seam
+  darkening), not a separate plastic material band. Each ring has a
+  deterministic float pose (bob, yaw, tilt) and sits so the waterline cuts the
+  tube; reflections come from the water system.
 - **Ladders/rails**: railing spans are cadenced around the ladder bays and
   terminate on the deck with flanges; ladder rails enter the water and stop ~1 m
   below, grab handles rise over the coping and land on deck flange plates. All
@@ -420,8 +427,8 @@ half-scale reflection target), which removed a reflection-side dash class.
 
 `materialDetail` drives the tile texture size (1024 vs 2048), POM step count
 (8 vs 12) and the lighting bake quality (probe grid dimensions, samples per
-probe, bounce count, AO accent). Low still boots and renders at 1280×720; the
-water prepass and reflection targets scale with the preset.
+probe, bounce count, contact-occlusion accent). Low still boots and renders at
+1280×720; the water prepass and reflection targets scale with the preset.
 
 ## 13. Determinism
 
@@ -509,10 +516,10 @@ These are real and deliberately not hidden with darkness, blur or letterbox:
 
 - **No TAA.** The scene target is MSAA 4× (2× on medium, none on low). Thin
   rails, ladder rungs and the flume lip can shimmer slightly during the fastest
-  camera transit; camera speed is capped at 1.78 m/s and the guide keeps its
-  calm windows. There is no chrome roughness/AA floor in the shipped materials
-  (that experiment was measured on the rail dashes and reverted because it did
-  not change them).
+  camera transit; the guided take peaks at 1.87 m/s (tested below 2.0 m/s) and
+  the guide keeps its calm windows. There is no chrome roughness/AA floor in the
+  shipped materials (that experiment was measured on the rail dashes and
+  reverted because it did not change them).
 - **Water is a screen-space/planar hybrid.** Reflection and refraction are
   reduced-resolution HDR targets (0.8×/0.68× at ultra); the reflection is
   slightly softened at distance by design. The refraction path solves the basin
