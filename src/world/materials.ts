@@ -9,6 +9,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { TileTextureSet } from './textures';
+import { applyTileShading } from './tileMaterial';
 
 export interface MaterialLibrary {
   tileWall: MeshPhysicalMaterial;
@@ -53,17 +54,18 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       map: tiles.albedo,
       normalMap: tiles.normal,
       roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
       metalness: 0,
       roughness: 1,
       clearcoat: 0.9,
-      clearcoatRoughness: 0.07,
+      clearcoatRoughness: 0.11,
     }),
   );
 
-  // The expression above is intentionally avoided: construct the vector explicitly
-  // so the material API stays readable and version-stable.
-  tileWall.normalScale.set(0.75, 0.75);
-  tileWall.color = new Color(0xf4f0e6);
+  // Glaze body colour is baked into the albedo; the material only tints it.
+  tileWall.normalScale.set(1, 1);
+  tileWall.color = new Color(0xffffff);
 
   const tileFloor = configure(
     new MeshPhysicalMaterial({
@@ -71,14 +73,16 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       map: tiles.albedo,
       normalMap: tiles.normal,
       roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
       metalness: 0,
       roughness: 1,
       clearcoat: 0.55,
-      clearcoatRoughness: 0.16,
+      clearcoatRoughness: 0.19,
     }),
   );
-  tileFloor.normalScale.set(0.9, 0.9);
-  tileFloor.color = new Color(0xe9e5db);
+  tileFloor.normalScale.set(1, 1);
+  tileFloor.color = new Color(0xf4efe2);
 
   const tileUnderwater = configure(
     new MeshPhysicalMaterial({
@@ -86,13 +90,15 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       map: tiles.albedo,
       normalMap: tiles.normal,
       roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
       metalness: 0,
       roughness: 1,
       clearcoat: 0.4,
-      clearcoatRoughness: 0.2,
+      clearcoatRoughness: 0.24,
     }),
   );
-  tileUnderwater.normalScale.set(0.9, 0.9);
+  tileUnderwater.normalScale.set(1, 1);
   tileUnderwater.color = new Color(0x9fb6ad);
 
   const tileDark = configure(
@@ -101,12 +107,55 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       map: tiles.albedo,
       normalMap: tiles.normal,
       roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
       color: 0x20443f,
       roughness: 1,
       metalness: 0,
     }),
   );
-  tileDark.normalScale.set(1.1, 1.1);
+  tileDark.normalScale.set(1, 1);
+
+  // One shared tile shader: real parallax occlusion on the grout/chamfer
+  // height field, per-tile variation from integer world coordinates, and
+  // world-space grime/algae so no 1 m repeat can be spotted.
+  applyTileShading(tileWall, tiles, {
+    grime: 0.55,
+    algae: 0.42,
+    algaeWidth: 0.22,
+    waterlineY: 0.36,
+    tintAmount: 0.12,
+    tiltAmount: 0.06,
+    parallax: true,
+  });
+  applyTileShading(tileFloor, tiles, {
+    grime: 0.8,
+    algae: 0.5,
+    algaeWidth: 0.18,
+    waterlineY: 0.04,
+    tintAmount: 0.13,
+    tiltAmount: 0.07,
+    parallax: true,
+  });
+  applyTileShading(tileUnderwater, tiles, {
+    underwater: true,
+    grime: 0.72,
+    algae: 1.1,
+    algaeWidth: 0.45,
+    waterlineY: 0,
+    tintAmount: 0.11,
+    tiltAmount: 0.05,
+    parallax: true,
+    grimeScale: 3.2,
+  });
+  applyTileShading(tileDark, tiles, {
+    grime: 0.95,
+    algae: 0.7,
+    waterlineY: 0.36,
+    tintAmount: 0.1,
+    tiltAmount: 0.045,
+    parallax: true,
+  });
 
   const plaster = configure(
     new MeshStandardMaterial({
@@ -243,11 +292,32 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
 
   const black = new MeshBasicMaterial({ name: 'void', color: 0x000000 });
 
-  const poolTileBand = new MeshStandardMaterial({
-    name: 'pool-band',
-    color: 0x1e514b,
-    roughness: 0.45,
-    metalness: 0.02,
+  // The lane band at the waterline: glazed teal tile, same ceramic system as
+  // the rest of the room so it does not read as a flat painted stripe next to
+  // the wainscot. Its algae band sits at the band's lower edge (y ≈ 0.10), the
+  // waterline as seen from this side.
+  const poolTileBand = configure(
+    new MeshStandardMaterial({
+      name: 'pool-band',
+      map: tiles.albedo,
+      normalMap: tiles.normal,
+      roughnessMap: tiles.roughness,
+      aoMap: tiles.ao,
+      aoMapIntensity: 1,
+      color: 0x1e514b,
+      roughness: 1,
+      metalness: 0.02,
+    }),
+  );
+  poolTileBand.normalScale.set(1, 1);
+  applyTileShading(poolTileBand, tiles, {
+    grime: 0.85,
+    algae: 0.9,
+    algaeWidth: 0.09,
+    waterlineY: 0.13,
+    tintAmount: 0.1,
+    tiltAmount: 0.055,
+    parallax: true,
   });
 
   // Planar architecture must cast and receive from both faces: the sun sits
