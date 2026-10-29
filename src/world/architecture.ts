@@ -426,7 +426,7 @@ export function buildArchitecture(scene: Scene, materials: MaterialLibrary): Arc
   // The warm endpoint: a lit doorway with real falloff and a far-door silhouette.
   if (!materials.warmGlow.map) {
     materials.warmGlow.map = createWarmDoorwayTexture();
-    materials.warmGlow.color.copy(hdrColor(0xffb26b, 2.7));
+    materials.warmGlow.color.copy(hdrColor(0xff9d4c, 1.85));
     materials.warmGlow.userData.emissiveMean = 0.55;
     materials.warmGlow.needsUpdate = true;
   }

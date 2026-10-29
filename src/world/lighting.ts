@@ -179,7 +179,7 @@ export function buildLighting(options: LightingOptions): Lighting {
   sun.shadow.normalBias = 0.035;
   // three.js r186 removed PCFSoftShadowMap; PCF's radius is the penumbra control.
   // The art direction asks for long soft bars, not a hard noon shadow edge.
-  sun.shadow.radius = 5.5;
+  sun.shadow.radius = 8;
   scene.add(sun);
   scene.add(sun.target);
   const sunDirection = sun.position.clone().sub(sun.target.position).normalize();
@@ -215,7 +215,7 @@ export function buildLighting(options: LightingOptions): Lighting {
 
   // One warm lamp deep inside the corridor: it lights the tiled side walls so the
   // arch reads as a lit space, while the doorway plane supplies the warm depth.
-  const corridorLight = new PointLight(0xff9a4d, 46, 26, 2);
+  const corridorLight = new PointLight(0xff8f3f, 38, 26, 2);
   corridorLight.position.set(LAYOUT.floodLight.position.x, 2.6, LAYOUT.hall.zMax + 4.6);
   scene.add(corridorLight);
   pointLights.push(corridorLight);
