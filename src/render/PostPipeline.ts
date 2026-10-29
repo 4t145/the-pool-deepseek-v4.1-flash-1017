@@ -338,7 +338,7 @@ export class PostPipeline {
     this.quality = quality;
     this.options = {
       letterbox: options.letterbox,
-      exposure: options.exposure ?? 1.25,
+      exposure: options.exposure ?? 1.2,
       bloom: options.bloom ?? 0.34,
       toneCurve: options.toneCurve ?? 'agx',
       grain: options.grain ?? GRAIN_AMOUNT,

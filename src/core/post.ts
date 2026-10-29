@@ -21,7 +21,7 @@ export const BLOOM_THRESHOLD = 1.5;
 /** Soft-knee width around the bloom threshold; keeps the highlight ramp continuous. */
 export const BLOOM_KNEE = 0.35;
 /** Peak bloom multiplier of the whole chain (the API value scales this). */
-export const BLOOM_GAIN = 0.68;
+export const BLOOM_GAIN = 0.55;
 /** Fine monochrome grain amplitude in display units. */
 export const GRAIN_AMOUNT = 0.017;
 /** Vignette strength at the frame corners. */
@@ -29,8 +29,8 @@ export const VIGNETTE_AMOUNT = 0.24;
 /** Edge chromatic aberration scale (UV units at the frame corner, before masking). */
 export const CHROMATIC_AMOUNT = 1.0;
 /** Saturation and contrast of the contained grade (display space). */
-export const GRADE_SATURATION = 1.09;
-export const GRADE_CONTRAST = 1.1;
+export const GRADE_SATURATION = 1.11;
+export const GRADE_CONTRAST = 1.15;
 /** Grain cadence; the trailer steps the clock at exactly this rate. */
 export const GRAIN_FRAME_RATE = 24;
 /** Optional 2.39:1 presentation mask. */
