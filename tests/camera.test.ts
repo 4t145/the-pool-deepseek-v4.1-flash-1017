@@ -89,14 +89,14 @@ describe('guided camera path', () => {
     expect(path.sample(CINEMATIC_DURATION).position[0]).toBeCloseTo(start.position[0], 5);
   });
 
-  it('moves slowly: peak translation speed below 2.6 m/s', () => {
+  it('moves slowly: peak translation speed below 2.0 m/s', () => {
     const dt = CINEMATIC_DURATION / SAMPLES;
     let peak = 0;
     for (let index = 0; index <= SAMPLES; index++) {
       const velocity = path.velocity(index * dt);
       peak = Math.max(peak, Math.hypot(velocity[0], velocity[1], velocity[2]));
     }
-    expect(peak).toBeLessThan(2.6);
+    expect(peak).toBeLessThan(2.0);
     expect(peak).toBeGreaterThan(0.5);
   });
 
@@ -252,7 +252,7 @@ describe('shot compositions', () => {
     expect(nearWater.v).toBeGreaterThan(0.5);
   });
 
-  it('aims the flume shot toward the hollow mouth anchor', () => {
+  it('frames the whole flume hero structure, hollow mouth included', () => {
     const flume = getShot('flume')!;
     const mouth = LAYOUT.slide.end;
     const distance = Math.hypot(
@@ -266,23 +266,90 @@ describe('shot compositions', () => {
       viewDirection({ position: flume.position, target: [mouth.x, mouth.y + 0.9, mouth.z] }),
     );
     expect(angle / DEG).toBeLessThan(25);
-    const projected = project(flume, [mouth.x, mouth.y, mouth.z]);
-    expect(projected.depth).toBeGreaterThan(0);
-    expect(projected.u).toBeGreaterThan(0.1);
-    expect(projected.u).toBeLessThan(0.9);
-    expect(projected.v).toBeGreaterThan(0.15);
-    expect(projected.v).toBeLessThan(0.95);
+
+    // The owner's framing review: the full hero structure must read — mouth,
+    // tower base, boarding platform and crown/funnel rim all inside the frame.
+    const anchors: Array<[string, [number, number, number]]> = [
+      ['mouth', [mouth.x, mouth.y, mouth.z]],
+      ['tower base', [LAYOUT.slide.tower.x, LAYOUT.hall.deck, LAYOUT.slide.tower.z]],
+      ['platform', [LAYOUT.slide.tower.x, LAYOUT.slide.platformY, LAYOUT.slide.tower.z]],
+      ['crown', [LAYOUT.slide.tower.x, LAYOUT.slide.topY, LAYOUT.slide.tower.z]],
+    ];
+    for (const [name, point] of anchors) {
+      const projected = project(flume, point);
+      expect(projected.depth, `${name} is behind the flume camera`).toBeGreaterThan(0);
+      expect(projected.u, `${name} u`).toBeGreaterThan(0.02);
+      expect(projected.u, `${name} u`).toBeLessThan(0.98);
+      expect(projected.v, `${name} v`).toBeGreaterThan(0.02);
+      expect(projected.v, `${name} v`).toBeLessThan(0.98);
+    }
   });
 
-  it('keeps the waterline crossing the skin shot', () => {
+  it('frames the skin shot on wall tile, grout and the basin waterline', () => {
     const skin = getShot('tile')!;
-    const waterline = project(skin, [LAYOUT.water.halfWidth, LAYOUT.water.surface, 4.2]);
+    const targetZ = skin.target[2];
+    // The glazed wall plane and the darker wainscot band must fill the frame.
+    let wallInside = 0;
+    let wallTotal = 0;
+    for (const y of [0.5, 0.7, 0.9, 1.1, 1.3, 1.45]) {
+      for (const dz of [-1.6, -0.8, 0, 0.8, 1.6]) {
+        wallTotal++;
+        const projected = project(skin, [LAYOUT.hall.halfWidth, y, targetZ + dz]);
+        if (
+          projected.depth > 0 &&
+          projected.u > 0 &&
+          projected.u < 1 &&
+          projected.v > 0 &&
+          projected.v < 1
+        ) {
+          wallInside++;
+        }
+      }
+    }
+    expect(wallInside / wallTotal).toBeGreaterThanOrEqual(2 / 3);
+    // White glazed tile above the wainscot (y > 1.21) must be visible too.
+    for (const dz of [-1.2, 0, 1.2]) {
+      const whiteTile = project(skin, [LAYOUT.hall.halfWidth, 1.4, targetZ + dz]);
+      expect(whiteTile.depth).toBeGreaterThan(0);
+      expect(whiteTile.u).toBeGreaterThan(0);
+      expect(whiteTile.u).toBeLessThan(1);
+      expect(whiteTile.v).toBeGreaterThan(0);
+      expect(whiteTile.v).toBeLessThan(1);
+    }
+    // The basin waterline (teal band / water surface against the right wall)
+    // must be in frame as well.
+    const waterline = project(skin, [LAYOUT.water.halfWidth, LAYOUT.water.surface, targetZ]);
     expect(waterline.depth).toBeGreaterThan(0);
-    expect(waterline.u).toBeGreaterThan(0.1);
-    expect(waterline.u).toBeLessThan(0.95);
+    expect(waterline.u).toBeGreaterThan(0);
+    expect(waterline.u).toBeLessThan(1);
     expect(waterline.v).toBeGreaterThan(0.1);
-    expect(waterline.v).toBeLessThan(0.95);
+    expect(waterline.v).toBeLessThan(1);
   });
+
+  it('keeps the whole floating ring inside the still-water frame', () => {
+    const ring = getShot('ring')!;
+    const red = LAYOUT.rings[1]!;
+    expect(red.id).toBe('red');
+    const outer = red.radius + red.tube;
+    for (let sample = 0; sample < 16; sample++) {
+      const angle = (sample / 16) * Math.PI * 2;
+      const point: [number, number, number] = [
+        red.position.x + Math.cos(angle) * outer,
+        red.position.y,
+        red.position.z + Math.sin(angle) * outer,
+      ];
+      const projected = project(ring, point);
+      expect(projected.depth, `rim sample ${sample} is behind the camera`).toBeGreaterThan(0);
+      expect(Math.abs(projected.u - 0.5), `rim sample ${sample} u`).toBeLessThan(0.5);
+      expect(Math.abs(projected.v - 0.5), `rim sample ${sample} v`).toBeLessThan(0.5);
+    }
+    const centre = project(ring, [red.position.x, red.position.y, red.position.z]);
+    expect(centre.u).toBeGreaterThan(0.3);
+    expect(centre.u).toBeLessThan(0.7);
+    expect(centre.v).toBeGreaterThan(0.2);
+    expect(centre.v).toBeLessThan(0.8);
+  });
+
 
   it('puts water in the bottom third of the ascension shot', () => {
     const skylight = getShot('skylight')!;
