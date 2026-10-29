@@ -134,8 +134,8 @@ export async function navigate(page, url, params = {}) {
   await page.goto(`${url}${suffix ? `?${suffix}` : ''}`, { waitUntil: 'domcontentloaded' });
 }
 
-export async function waitForReady(page) {
-  await page.waitForFunction(() => window.__POOL_READY__ === true, undefined, { timeout: 180_000 });
+export async function waitForReady(page, { timeout = 150_000 } = {}) {
+  await page.waitForFunction(() => window.__POOL_READY__ === true, undefined, { timeout });
 }
 
 /**
@@ -291,4 +291,46 @@ export const totalErrors = (errors) => errors.filter((error) => !/favicon/i.test
 export function formatStats(stats) {
   if (!stats) return '(no stats)';
   return `${stats.drawCalls} calls · ${(stats.triangles / 1000).toFixed(1)}k tri · ${stats.fps.toFixed(1)} fps · ${stats.mode}/${stats.shot}`;
+}
+
+/**
+ * Self-healing positioned still: open a fresh scene, assert the requested shot,
+ * render the exact scene time, capture the drawing buffer. Boot and capture are
+ * retried with a fresh page because a saturated host (many peers capturing at
+ * once) can blow the __POOL_READY__ wait; a retry must never silently ship the
+ * wrong camera pose (that is what ensureShot is for).
+ */
+export async function captureStill(
+  browser,
+  url,
+  { width, height, params, shotId, time, target, letterbox = false, format = 'png', attempts = 3 },
+) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let scene = null;
+    try {
+      scene = await openScene(browser, url, { width, height, params });
+      await prepareCapture(scene.page, { letterbox });
+      const state = await ensureShot(scene.page, shotId);
+      await renderAt(scene.page, time, { frames: 0 });
+      const stats = await readStats(scene.page);
+      const verified = stats?.mode === 'shot' && stats.shot === shotId;
+      if (!verified) throw new Error(`camera is not on "${shotId}" (mode=${stats?.mode ?? '?'} shot=${stats?.shot ?? '?'})`);
+      await captureCanvas(scene.page, target, { format });
+      return {
+        stats,
+        verified,
+        shotAttempts: state.attempts,
+        bootAttempt: attempt,
+        errors: totalErrors(scene.errors),
+      };
+    } catch (error) {
+      lastError = error;
+      console.warn(`[bench] ${shotId} capture attempt ${attempt}/${attempts} failed: ${error.message}`);
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    } finally {
+      await scene?.context.close().catch(() => {});
+    }
+  }
+  throw lastError ?? new Error(`failed to capture ${shotId}`);
 }

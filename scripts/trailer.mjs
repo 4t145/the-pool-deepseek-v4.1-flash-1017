@@ -184,11 +184,23 @@ const browser = await launchBrowser();
 let failures = 0;
 
 try {
-  const { page, context, errors } = await openScene(browser, url, {
-    width,
-    height,
-    params: { capture: 1, quality, t: 0, hud: 0, letterbox: 1 },
-  });
+  // Boot can be slow when several peers are rendering: retry the page instead
+  // of failing a long capture run.
+  let scene = null;
+  for (let attempt = 1; attempt <= 3 && !scene; attempt++) {
+    try {
+      scene = await openScene(browser, url, {
+        width,
+        height,
+        params: { capture: 1, quality, t: 0, hud: 0, letterbox: 1 },
+      });
+    } catch (error) {
+      console.warn(`[trailer] boot attempt /3 failed: `);
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    }
+  }
+  if (!scene) throw new Error('trailer page never reached __POOL_READY__');
+  const { page, context, errors } = scene;
   await prepareCapture(page, { letterbox: true });
   await ensureCinematic(page);
 
