@@ -62,10 +62,12 @@ Evidence status at capture time
   the same stroke appears (a) on the dry tiled wall above the waterline, (b) on
   the coping/wall corner, and (c) in the water as its reflection. Crop evidence:
   docs/evidence/camera-qa-dash-attribution.png (3x nearest-neighbour zoom of
-  arch). That rules out water-RT-only aliasing: it is the shadow of a sub-pixel
-  thin chrome rail/ladder aliasing in the sun shadow map, faithfully reflected by
-  the water. Suggested owner: props lane `castShadow = false` on the merged thin
-  chrome batch (or lighting shadow radius/bias), then w6 re-captures.
+  arch). The strokes appear over the dry wall, the coping and the water
+  reflection at once, so they are a screen-space overlay, not a reflection or a
+  shadow. w4 bisected scene groups and identified the source: hiding the
+  `volumetrics` group removes them, while water removal, chrome A/B, shadow
+  off, tile maps off, props and room-detail all leave them. Owner: w1
+  (`src/world/volumetrics.ts`). w6 must capture stills after that fix.
 - Verification on this head: `pnpm typecheck` PASS, `pnpm test` PASS (102 tests,
   10 files), `pnpm build` PASS, camera suite 17/17.
 
