@@ -1,6 +1,7 @@
-Camera integration QA — acceptedHead 534e2302 (owner goal revision 1, task 618f04d1)
+Camera integration QA — acceptedHead dfa2faf (owner goal revision 1, task 618f04d1)
 
-Head reviewed: 534e2302 + this branch's evidence commit only (no camera code changes).
+Head reviewed: dfa2faf (includes w5's reframe 534e2302 and w1's water reflection
+kernel fix dfa2faf) + this branch's evidence commit only. No camera code changes.
 Captures: seven 1920x1080 stills, ultra, renderAt(2.4), HUD/loader removed.
 Sheet: docs/evidence/camera-qa-7up-1080.jpg (arrival, flume, ring / arch,
 skylight, tile / float). Individual stills were regenerated into /tmp for the
@@ -55,11 +56,16 @@ Per-shot framing review against docs/ART_DIRECTION.md §5
    No clipping.
 
 Evidence status at capture time
-- All seven captures are 1920x1080, UI-free, no loader/HUD/debug geometry.
-- The black dashed waterline strokes are still present in flume/ring/arch at this
-  head. Attribution is settled (w2's chrome A/B is pixel-identical; it is the
-  water reflection kernel) and w1 holds 0f0d4623 to land the 9-tap/blur-floor +
-  reflection-target-texel fix; re-capture w6's final stills after that merge.
+- All seven captures are 1920x1080, UI-free, no loader/HUD/debug geometry, and
+  were taken after merging w1's water reflection kernel fix (dfa2faf).
+- The black dashed strokes are still present, and the attribution is now precise:
+  the same stroke appears (a) on the dry tiled wall above the waterline, (b) on
+  the coping/wall corner, and (c) in the water as its reflection. Crop evidence:
+  docs/evidence/camera-qa-dash-attribution.png (3x nearest-neighbour zoom of
+  arch). That rules out water-RT-only aliasing: it is the shadow of a sub-pixel
+  thin chrome rail/ladder aliasing in the sun shadow map, faithfully reflected by
+  the water. Suggested owner: props lane `castShadow = false` on the merged thin
+  chrome batch (or lighting shadow radius/bias), then w6 re-captures.
 - Verification on this head: `pnpm typecheck` PASS, `pnpm test` PASS (102 tests,
   10 files), `pnpm build` PASS, camera suite 17/17.
 
