@@ -245,12 +245,18 @@ function createRingPrintTexture(primary: number, secondary: number, seed: number
   drawBand(height * 0.27, height * 0.13);
   drawBand(height * 0.73, height * 0.13);
 
-  // Mould seam: darkened band at the UV seam.
+  // Mould seam, printed into the vinyl rather than modelled as a thin torus:
+  // a darker soft band at the outer equator (the torus UV seam, v = 0/1) and a
+  // faint mould line at the inner equator (v = 0.5), both soft enough that they
+  // cannot alias into a dotted black line at distance.
   const seamGradient = ctx.createLinearGradient(0, 0, 0, height);
-  seamGradient.addColorStop(0.0, 'rgba(0,0,0,0.24)');
-  seamGradient.addColorStop(0.06, 'rgba(0,0,0,0.0)');
-  seamGradient.addColorStop(0.94, 'rgba(0,0,0,0.0)');
-  seamGradient.addColorStop(1.0, 'rgba(0,0,0,0.24)');
+  seamGradient.addColorStop(0.0, 'rgba(0,0,0,0.26)');
+  seamGradient.addColorStop(0.07, 'rgba(0,0,0,0.0)');
+  seamGradient.addColorStop(0.44, 'rgba(0,0,0,0.0)');
+  seamGradient.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+  seamGradient.addColorStop(0.56, 'rgba(0,0,0,0.0)');
+  seamGradient.addColorStop(0.93, 'rgba(0,0,0,0.0)');
+  seamGradient.addColorStop(1.0, 'rgba(0,0,0,0.26)');
   ctx.fillStyle = seamGradient;
   ctx.fillRect(0, 0, width, height);
 
@@ -688,28 +694,16 @@ function buildRing(
   ringMesh.receiveShadow = true;
   group.add(ringMesh);
 
-  // Moulded seams along the outer and inner equators, plus the rubber valve
-  // patch and cap slot. Per-ring so they bob with the body.
-  const seams = new GeometryBatch();
-  for (const seamRadius of [radius + tube, radius - tube]) {
-    const seam = new TorusGeometry(seamRadius, 0.0055, 6, 104);
-    seam.rotateX(Math.PI / 2);
-    seams.add(seam);
-  }
+  // No separate seam geometry: at 1080p a 5 mm dark torus on the rim aliases
+  // into a black dotted line (owner art-direction correction). The moulded seam
+  // is printed into the vinyl texture at the torus UV seam instead, so it stays
+  // soft at distance and still reads in the close-up.
   // The valve sits on the crown of the tube (radius = ring radius), where the
-  // surface is flattest, so the patch ring and base cannot float or clip.
+  // surface is flattest, so its base cannot float or clip.
   const valveAngle = config.phase * 1.7 + 0.6;
   const valveX = Math.cos(valveAngle) * radius;
   const valveZ = Math.sin(valveAngle) * radius;
   const crown = tube * flatten;
-  const patch = new TorusGeometry(0.078, 0.014, 8, 40);
-  patch.rotateX(Math.PI / 2);
-  seams.addTransformed(patch, new Vector3(valveX, crown - 0.005, valveZ));
-  seams.build(
-    new MeshStandardMaterial({ name: 'vinyl.seam', color: 0x55504a, roughness: 0.56, metalness: 0.02 }),
-    `ring.${config.id}.seams`,
-    group,
-  );
 
   const valves = new GeometryBatch();
   const base = new CylinderGeometry(0.058, 0.064, 0.014, 20);
