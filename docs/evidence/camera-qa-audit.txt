@@ -1,0 +1,74 @@
+Camera integration QA — acceptedHead 534e2302 (owner goal revision 1, task 618f04d1)
+
+Head reviewed: 534e2302 + this branch's evidence commit only (no camera code changes).
+Captures: seven 1920x1080 stills, ultra, renderAt(2.4), HUD/loader removed.
+Sheet: docs/evidence/camera-qa-7up-1080.jpg (arrival, flume, ring / arch,
+skylight, tile / float). Individual stills were regenerated into /tmp for the
+review and re-captured by w6 for the committed `stills/`; the ring frame is kept
+here as docs/evidence/camera-qa-ring-1080.png because of the waterline note below.
+
+Audit tool
+- Merged suite: `pnpm exec vitest run tests/camera.test.ts` -> 17/17 pass, exit 0
+  (seam pose+velocity, peak speed, peak turn, seven-pose pass-through, hall box,
+  flume clearance, determinism, wrap-around).
+- Equivalent sampler (same path, 2401 samples over the 56 s cycle, this head):
+  duration            56.0 s
+  seam position delta 4.90e-7 m
+  seam target delta   1.34e-6 m
+  seam velocity delta 1.41e-6 m/s
+  max speed           1.869 m/s @ t=44.85 s        (limit 2.0)
+  max turn rate       14.24 deg/s @ t=28.26 s      (limit 15)
+  min flume clearance 1.58 m (radial to the helix envelope, y<6.6)
+  clipping violations 0 (hall box, water clearance, z limits, flume keep-out)
+  seven shot poses     poseDelta 0.0, angle error <= 1.5e-6 deg for all seven
+  Interpretation: the take closes without a visual cut and passes every
+  composition pose exactly. Speed and turn rate are inside the contract but
+  close to it (93 % and 95 % of the limits); do not speed the path up further
+  without re-running this sampler.
+
+Per-shot framing review against docs/ART_DIRECTION.md §5
+1. arrival  - PASS. Low, centred; flume mass large at screen left; skylight leads
+   to the far arch; water foreground; poster-grade. No clipping.
+2. flume    - PASS. Full hero corkscrew, tiled tower and crown in frame; hollow
+   mouth reads with liner depth; waterline, contact foam and full reflection
+   visible. No cropping through geometry.
+3. ring     - PASS framing. Red ring centred at close range, not stretched at the
+   frame edge, with ladder/rails and the waterline in the same frame. Caustics
+   are intentionally faint after the rev-1 darkening. Weakness: the ring's
+   waterline contact cue is too subtle (its reflection is a dark ghost under the
+   tube and the contact foam is barely visible at 1080p) - flagged for the water
+   lane, not a camera defect.
+4. arch     - PASS framing. Slightly off the centre line, arch screen in
+   perspective, blue ring in the middle ground, warm corridor beyond, haze.
+   Weakness: the warm far-arch spill reads pale/grey rather than amber at this
+   exposure (lighting/post lane), so the cold/warm separation is not as strong as
+   ART_DIRECTION §4 asks.
+5. skylight - PASS. Low angle up into the skylight; frosted windows both sides;
+   water in the bottom third; volumetric dust visible; skylight highlight retains
+   structure (no flat white blob).
+6. tile     - PASS owner reframe. Wall tile and grout above the waterline band,
+   chrome rail/ladder and the water surface with ripples in the same frame; no
+   deck-only framing. Note: the glazed tile reads slightly cool/neutral in this
+   light; ART_DIRECTION wants warm bone, a material/grade observation, not framing.
+7. float    - PASS. High over the near end; flume footprint left, rings receding,
+   far arch and skylight axis visible; clear foreground/middleground/background.
+   No clipping.
+
+Evidence status at capture time
+- All seven captures are 1920x1080, UI-free, no loader/HUD/debug geometry.
+- The black dashed waterline strokes are still present in flume/ring/arch at this
+  head. Attribution is settled (w2's chrome A/B is pixel-identical; it is the
+  water reflection kernel) and w1 holds 0f0d4623 to land the 9-tap/blur-floor +
+  reflection-target-texel fix; re-capture w6's final stills after that merge.
+- Verification on this head: `pnpm typecheck` PASS, `pnpm test` PASS (102 tests,
+  10 files), `pnpm build` PASS, camera suite 17/17.
+
+Residual framing risks
+- Tile shot is a strong material frame but nearly parallel to the wall; at 1080p
+  the POM/bevel is only readable in the near third. A 5-10 degree more oblique
+  angle would show bevel depth across more of the frame, at the cost of less wall
+  coverage. Not changed here; the owner's framing criterion is met.
+- Ring shot subject scale means the ring occupies the middle third; if the owner
+  wants more water context, a wider fov (42) or +0.3 m back would trade macro for
+  context. Not changed: the current frame satisfies "close to the red ring" and
+  keeps the reflection + waterline in frame.
