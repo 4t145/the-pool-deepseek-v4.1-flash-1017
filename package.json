@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "shot": "bash scripts/run-browser.sh node scripts/shot.mjs",
+    "stills": "bash scripts/run-browser.sh node scripts/stills.mjs",
     "trailer": "bash scripts/run-browser.sh node scripts/trailer.mjs",
+    "perf": "bash scripts/run-browser.sh node scripts/perf.mjs",
+    "determinism": "bash scripts/run-browser.sh node scripts/determinism.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
