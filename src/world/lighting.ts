@@ -126,14 +126,28 @@ function fallbackEnvironment(renderer: WebGLRenderer): Texture {
  * The baked probe grid now supplies the room's directional diffuse bounce, so
  * the IBL's own diffuse contribution would double-count it. Keep the env map
  * (chrome needs the window/skylight reflections) but attenuate it on dielectric
- * materials only; metals keep their authored response.
+ * materials only; metals keep the current effective response.
  *
  * Clearcoat materials (glazed tile, the red PVC) are treated more gently: their
  * bevel catch-light is almost entirely IBL specular, so a heavy attenuation
  * flattens the glaze. They get a lighter factor that keeps the thin specular
  * line while still cutting most of the duplicate diffuse.
+ *
+ * IMPORTANT (three r186): `WebGLRenderer.setProgram` overwrites the
+ * `envMapIntensity` uniform with `scene.environmentIntensity` whenever
+ * `material.envMap === null` and `scene.environment` is set, and
+ * `refreshUniformsStandard/Physical` only read `material.envMapIntensity` when
+ * `material.envMap` is truthy. So the per-material scale below only works if the
+ * environment is pinned onto each material first; otherwise the whole function
+ * is a silent no-op.
  */
-function attenuateDielectricIbl(scene: Scene, matteFactor: number, clearcoatFactor: number): void {
+function applyIblResponse(
+  scene: Scene,
+  environment: Texture | null,
+  baseIntensity: number,
+  matteFactor: number,
+  clearcoatFactor: number,
+): void {
   const patched = new Set<MeshStandardMaterial>();
   scene.traverse((object) => {
     const mesh = object as Mesh;
@@ -143,9 +157,12 @@ function attenuateDielectricIbl(scene: Scene, matteFactor: number, clearcoatFact
     if (!(material instanceof MeshStandardMaterial) && !(material instanceof MeshPhysicalMaterial)) return;
     if (patched.has(material)) return;
     patched.add(material);
-    if (material.metalness > 0.6) return;
+    // Pin the environment so three honours the per-material intensity below.
+    if (environment) material.envMap = environment;
     const clearcoat = (material as MeshPhysicalMaterial).clearcoat ?? 0;
-    material.envMapIntensity *= clearcoat > 0.2 ? clearcoatFactor : matteFactor;
+    const isMetal = material.metalness > 0.6;
+    const factor = isMetal ? 1 : clearcoat > 0.2 ? clearcoatFactor : matteFactor;
+    material.envMapIntensity = baseIntensity * factor;
     material.needsUpdate = true;
   });
 }
@@ -251,7 +268,7 @@ export function buildLighting(options: LightingOptions): Lighting {
       seed: 0x51ff,
     });
     scene.add(probes.volume);
-    attenuateDielectricIbl(scene, 0.42, 0.8);
+    applyIblResponse(scene, environment, 0.8, 0.42, 0.8);
     const stats = probes.stats;
     console.info(
       `[pool] probe bake: ${stats.probes} probes ${stats.gridDims.join('x')}, N=${stats.samplesPerProbe}, ` +
