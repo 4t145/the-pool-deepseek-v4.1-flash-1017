@@ -70,13 +70,20 @@ vec2 tileCellIndex = floor(tileUv);
 vec2 tileLocal = fract(tileUv);
 
 float tileFootprint = max(fwidth(tileUv.x), fwidth(tileUv.y));
+// Distance from the camera: specular aliasing on glazed tile is a distance
+// problem, not only a footprint problem. A window reflected in a 15-px tile
+// resolves per tile as isolated 1-3 px squares; widening the lobe with distance
+// turns those into the soft sheen a real glaze gives at range.
+float tileDistance = length(cameraPosition - vTileWorld);
+float tileSpecDistance = smoothstep(5.0, 26.0, tileDistance);
 // Three independent fade bands, because the features they guard have very
 // different sizes and alias at very different distances:
 //  - bevel/chip detail (~2–10 mm) is sub-pixel past ~0.02–0.12 tile/pixel,
-//  - per-tile tilt (~5°) sparkles on distant walls sooner than the albedo,
+//  - per-tile tilt (~5°) fragments distant window reflections into tile-sized
+//    glints, so it also fades with distance and disappears past ~14 m,
 //  - per-tile tint only matters once tiles are smaller than a couple of pixels.
 float tileDetail = 1.0 - smoothstep(0.02, 0.12, tileFootprint);
-float tileTiltFade = 1.0 - smoothstep(0.06, 0.4, tileFootprint);
+float tileTiltFade = (1.0 - smoothstep(0.06, 0.4, tileFootprint)) * (1.0 - smoothstep(3.0, 14.0, tileDistance));
 float tileVariation = 1.0 - smoothstep(0.45, 1.8, tileFootprint);
 
 float tileH0 = tileHash(tileCellIndex);
@@ -93,18 +100,27 @@ float tileChipRadius = 0.06 + 0.08 * tileH2;
 float tileChip = tileChipSelect * (1.0 - smoothstep(tileChipRadius * 0.3, tileChipRadius, length(tileLocal - tileChipCorner))) * tileDetail;
 
 // Hand-set irregularity: each tile is set a millimetre or two off, so the
-// visible grout joint is not a perfect machine grid.
-vec2 tileWarp = (vec2(tileH0, tileH1) - 0.5) * 0.024;
+// visible grout joint is not a perfect machine grid. The offset jumps at the
+// tile boundary, so it must fade out before the grout line becomes sub-pixel:
+// otherwise the UV discontinuity spikes the texture LOD exactly along the joint
+// and a receding grout line breaks into black dashes.
+vec2 tileWarp = (vec2(tileH0, tileH1) - 0.5) * 0.024 * (1.0 - smoothstep(0.008, 0.07, tileFootprint));
 vec2 tileSampleUv = tileUv + tileWarp;
 
 vec3 tileView = normalize(cameraPosition - vTileWorld);
 float tileVt = dot(tileView, tileAxisT);
 float tileVb = dot(tileView, tileAxisB);
 float tileVn = max(abs(dot(tileView, tileNormalW)), 0.12);
-vec2 tilePomDir = -vec2(tileVt, tileVb) / tileVn * uTileRelief * tileDetail;
+// Parallax must also fade with grazing incidence, not only with footprint: at
+// a few degrees the ray-march hit jumps by several millimetres between pixels,
+// which breaks a sub-pixel grout line into a dashed black line. Horizontal tile
+// (steps, deck) seen from eye height is ~6 deg past 12 m, i.e. this fades it
+// out well before the bevel is small enough to alias on its own.
+float tilePomFade = smoothstep(0.16, 0.42, tileVn);
+vec2 tilePomDir = -vec2(tileVt, tileVb) / tileVn * uTileRelief * tileDetail * tilePomFade;
 vec2 tileSample = tileSampleUv;
 
-if (uTileParallax > 0.5 && tileDetail > 0.02) {
+if (uTileParallax > 0.5 && tileDetail > 0.10 && tilePomFade > 0.01) {
   float tileStepSize = 1.0 / max(uTileSteps, 4.0);
   for (int tileI = 1; tileI <= 12; tileI++) {
     float tileT = float(tileI) * tileStepSize;
@@ -162,6 +178,10 @@ float roughnessFactor = roughness;
   // Glaze is never perfectly uniform tile to tile: vary the specular response,
   // but fade the variation out at distance so it cannot alias into sparkle.
   roughnessFactor *= mix(1.0, 0.82 + 0.36 * tileH1, tileTiltFade);
+  // Specular antialiasing: a near-mirror glaze reflecting a small bright window
+  // resolves as isolated 1-3 px squares at range. Widen the lobe with distance
+  // so the reflection reads as sheen instead of pixel sparkle.
+  roughnessFactor = max(roughnessFactor, mix(0.05, 0.30, tileSpecDistance));
   roughnessFactor = mix(roughnessFactor, 0.86, tileGrime * 0.70);
   roughnessFactor = mix(roughnessFactor, 0.94, tileAlgae * 0.60);
   roughnessFactor = mix(roughnessFactor, 0.92, tileChip * 0.55);
@@ -303,7 +323,10 @@ vTileNormal = normalize( mat3( modelMatrix ) * objectNormal );
       )
       .replace(
         'material.clearcoatRoughness = clearcoatRoughness;',
-        'material.clearcoatRoughness = clearcoatRoughness * mix(0.8, 1.3, tileH1);',
+        /* glsl */ `material.clearcoatRoughness = max(
+  clearcoatRoughness * mix(1.0, mix(0.8, 1.3, tileH1), 1.0 - smoothstep(4.0, 16.0, tileDistance)),
+  mix(0.065, 0.28, tileSpecDistance)
+);`,
       );
   });
 }
