@@ -75,7 +75,9 @@ between stages so the loader can paint:
    - **IBL bake**: a `CubeCamera` captures the real lit room into a PMREM
      environment (specular response for chrome/water/wet tile);
    - **probe-grid bake**: a BVH of the built room is ray traced into a 3D
-     irradiance + AO probe volume (see §8).
+     irradiance probe volume (nine SH coefficients; occlusion is implicit in
+     the radiance field plus the 0.3 m contact accent — there is no separate AO
+     channel). See §8.
    Then the volumetric shaft cards + dust cloud are built. Shadows freeze after
    frame 3.
 9. **Water** — reflection and refraction render targets, water normals and the
@@ -424,8 +426,8 @@ half-scale reflection target), which removed a reflection-side dash class.
 
 `materialDetail` drives the tile texture size (1024 vs 2048), POM step count
 (8 vs 12) and the lighting bake quality (probe grid dimensions, samples per
-probe, bounce count, AO accent). Low still boots and renders at 1280×720; the
-water prepass and reflection targets scale with the preset.
+probe, bounce count, contact-occlusion accent). Low still boots and renders at
+1280×720; the water prepass and reflection targets scale with the preset.
 
 ## 13. Determinism
 
