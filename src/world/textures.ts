@@ -190,11 +190,11 @@ export function createTileTextures(renderer: WebGLRenderer, options: TileOptions
       // ---- Albedo --------------------------------------------------------
       const mottle = periodicFbm(u * 14, v * 14, 14, seed + 5, 3);
       const fine = periodicFbm(u * 70, v * 70, 70, seed + 9, 2);
-      // Bone glaze: warm, never pure white. #e6e0d1-ish with a little cool
+      // Bone glaze: warm, never pure white. #e7dfcd-ish with a little cool
       // variation so the wall does not read as one flat cream.
-      const glazeR = 0.9 + (mottle - 0.5) * 0.055 + (fine - 0.5) * 0.02;
-      const glazeG = 0.882 + (mottle - 0.5) * 0.05 + (fine - 0.5) * 0.018;
-      const glazeB = 0.824 + (mottle - 0.5) * 0.045 + (fine - 0.5) * 0.016;
+      const glazeR = 0.905 + (mottle - 0.5) * 0.055 + (fine - 0.5) * 0.02;
+      const glazeG = 0.878 + (mottle - 0.5) * 0.05 + (fine - 0.5) * 0.018;
+      const glazeB = 0.808 + (mottle - 0.5) * 0.045 + (fine - 0.5) * 0.016;
 
       // Mid-grey, slightly warm grout. It must stay darker than the glaze but
       // not read as a black drawn line: the cavity AO below does that job.

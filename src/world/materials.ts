@@ -59,7 +59,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       metalness: 0,
       roughness: 1,
       clearcoat: 0.9,
-      clearcoatRoughness: 0.07,
+      clearcoatRoughness: 0.11,
     }),
   );
 
@@ -78,7 +78,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       metalness: 0,
       roughness: 1,
       clearcoat: 0.55,
-      clearcoatRoughness: 0.16,
+      clearcoatRoughness: 0.19,
     }),
   );
   tileFloor.normalScale.set(1, 1);
@@ -95,7 +95,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
       metalness: 0,
       roughness: 1,
       clearcoat: 0.4,
-      clearcoatRoughness: 0.2,
+      clearcoatRoughness: 0.24,
     }),
   );
   tileUnderwater.normalScale.set(1, 1);
@@ -125,7 +125,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
     algaeWidth: 0.22,
     waterlineY: 0.36,
     tintAmount: 0.12,
-    tiltAmount: 0.09,
+    tiltAmount: 0.06,
     parallax: true,
   });
   applyTileShading(tileFloor, tiles, {
@@ -134,7 +134,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
     algaeWidth: 0.18,
     waterlineY: 0.04,
     tintAmount: 0.13,
-    tiltAmount: 0.1,
+    tiltAmount: 0.07,
     parallax: true,
   });
   applyTileShading(tileUnderwater, tiles, {
@@ -144,7 +144,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
     algaeWidth: 0.45,
     waterlineY: 0,
     tintAmount: 0.11,
-    tiltAmount: 0.07,
+    tiltAmount: 0.05,
     parallax: true,
     grimeScale: 3.2,
   });
@@ -153,7 +153,7 @@ export function createMaterials(options: MaterialOptions): MaterialLibrary {
     algae: 0.7,
     waterlineY: 0.36,
     tintAmount: 0.1,
-    tiltAmount: 0.06,
+    tiltAmount: 0.045,
     parallax: true,
   });
 

@@ -70,7 +70,13 @@ vec2 tileCellIndex = floor(tileUv);
 vec2 tileLocal = fract(tileUv);
 
 float tileFootprint = max(fwidth(tileUv.x), fwidth(tileUv.y));
-float tileDetail = 1.0 - smoothstep(0.18, 0.75, tileFootprint);
+// Three independent fade bands, because the features they guard have very
+// different sizes and alias at very different distances:
+//  - bevel/chip detail (~2–10 mm) is sub-pixel past ~0.02–0.12 tile/pixel,
+//  - per-tile tilt (~5°) sparkles on distant walls sooner than the albedo,
+//  - per-tile tint only matters once tiles are smaller than a couple of pixels.
+float tileDetail = 1.0 - smoothstep(0.02, 0.12, tileFootprint);
+float tileTiltFade = 1.0 - smoothstep(0.06, 0.4, tileFootprint);
 float tileVariation = 1.0 - smoothstep(0.45, 1.8, tileFootprint);
 
 float tileH0 = tileHash(tileCellIndex);
@@ -80,10 +86,11 @@ float tileH3 = tileHash(tileCellIndex + vec2(71.37, 13.91));
 
 float tileTint = 1.0 + (tileH0 - 0.5) * uTileTintAmount * tileVariation;
 float tileWarm = (tileH2 - 0.5) * uTileTintAmount * 0.45 * tileVariation;
-vec2 tileTilt = (vec2(tileH1, tileH2) - 0.5) * 2.0 * uTileTilt * tileDetail;
+vec2 tileTilt = (vec2(tileH1, tileH2) - 0.5) * 2.0 * uTileTilt * tileTiltFade;
 vec2 tileChipCorner = step(0.5, vec2(tileH1, tileH2));
 float tileChipSelect = step(1.0 - uTileChipRate, tileH3);
-float tileChip = tileChipSelect * (1.0 - smoothstep(0.035, 0.105, length(tileLocal - tileChipCorner))) * tileDetail;
+float tileChipRadius = 0.06 + 0.08 * tileH2;
+float tileChip = tileChipSelect * (1.0 - smoothstep(tileChipRadius * 0.3, tileChipRadius, length(tileLocal - tileChipCorner))) * tileDetail;
 
 // Hand-set irregularity: each tile is set a millimetre or two off, so the
 // visible grout joint is not a perfect machine grid.
@@ -113,7 +120,10 @@ if (uTileParallax > 0.5 && tileDetail > 0.02) {
 
 vec2 tileGrimeUv = tileWorldUv / max(uTileGrimeScale, 0.5);
 float tileBlotch = texture2D(uTileGrime, tileGrimeUv * 0.41 + vec2(0.13, 0.71)).r;
-float tileStreak = texture2D(uTileGrime, vec2(tileWorldUv.x * 0.55, tileWorldUv.y * 0.045) / max(uTileGrimeScale, 0.5)).r;
+// Sheared, vertically stretched sample: drips are not a straight 4 m-repeat
+// grid, so the world-space grime never lines up with the architecture.
+float tileStreakX = tileWorldUv.x * 0.55 + vTileWorld.y * 0.17;
+float tileStreak = texture2D(uTileGrime, vec2(tileStreakX, tileWorldUv.y * 0.045) / max(uTileGrimeScale, 0.5)).r;
 float tileDripBand = smoothstep(uTileWaterline + 0.35, uTileWaterline + 1.1, vTileWorld.y)
                    * (1.0 - smoothstep(4.4, 5.7, vTileWorld.y));
 float tileGrime = clamp((smoothstep(0.56, 0.82, tileBlotch) * 0.5
@@ -136,7 +146,9 @@ const REPLACEMENTS: Array<{ needle: string; replacement: string }> = [
   diffuseColor.rgb *= vec3(1.0 + tileWarm, 1.0, 1.0 - tileWarm);
   diffuseColor.rgb = mix(diffuseColor.rgb, tileGrimeColor, tileGrime * 0.60);
   diffuseColor.rgb = mix(diffuseColor.rgb, tileAlgaeColor, tileAlgae * 0.85);
-  diffuseColor.rgb *= 1.0 - tileChip * 0.42;
+  // A broken corner exposes the biscuit body: matte, slightly warm, never a
+  // black notch. The shader roughness pass makes it matte as well.
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.245, 0.2), tileChip * 0.85);
 #endif
 `,
   },
@@ -147,8 +159,9 @@ float roughnessFactor = roughness;
 #ifdef USE_ROUGHNESSMAP
   vec4 texelRoughness = texture2D( roughnessMap, tileSample );
   roughnessFactor *= texelRoughness.g;
-  // Glaze is never perfectly uniform tile to tile: vary the specular response.
-  roughnessFactor *= 0.82 + 0.36 * tileH1;
+  // Glaze is never perfectly uniform tile to tile: vary the specular response,
+  // but fade the variation out at distance so it cannot alias into sparkle.
+  roughnessFactor *= mix(1.0, 0.82 + 0.36 * tileH1, tileTiltFade);
   roughnessFactor = mix(roughnessFactor, 0.86, tileGrime * 0.70);
   roughnessFactor = mix(roughnessFactor, 0.94, tileAlgae * 0.60);
   roughnessFactor = mix(roughnessFactor, 0.92, tileChip * 0.55);
@@ -162,7 +175,7 @@ float roughnessFactor = roughness;
   vec3 mapN = texture2D( normalMap, tileSample ).xyz * 2.0 - 1.0;
   // Fade the micro-normal with screen footprint: sub-pixel bevel and glaze
   // warp alias into specular fireflies on distance walls otherwise.
-  mapN.xy *= normalScale * mix( 0.12, 1.0, tileDetail );
+  mapN.xy *= normalScale * tileDetail;
   mapN.xy += tileTilt;
   mapN = normalize( mapN );
   normal = normalize( tbn * mapN );
@@ -254,7 +267,7 @@ export function applyTileShading(
     shader.uniforms.uTileAlgaeWidth = { value: options.algaeWidth ?? (underwater ? TILE.algaeWidthMetres : 0.16) };
     shader.uniforms.uTileTintAmount = { value: options.tintAmount ?? 0.12 };
     shader.uniforms.uTileTilt = { value: options.tiltAmount ?? 0.09 };
-    shader.uniforms.uTileChipRate = { value: options.chipRate ?? 0.05 };
+    shader.uniforms.uTileChipRate = { value: options.chipRate ?? 0.06 };
     shader.uniforms.uTileGrimeScale = { value: options.grimeScale ?? 4.0 };
 
     shader.vertexShader = shader.vertexShader
