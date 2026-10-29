@@ -65,14 +65,15 @@ const SHAFT_FRAGMENT = /* glsl */ `
   }
 
   void main() {
-    float across = smoothstep(0.0, 0.34, vUv.x) * smoothstep(1.0, 0.66, vUv.x);
-    float along = smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.55, vUv.y);
+    float across = smoothstep(0.0, 0.4, vUv.x) * smoothstep(1.0, 0.6, vUv.x);
+    float along = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
     // Cards are world-Z aligned; fade them out when seen edge-on so they never
     // read as flat sheets from a side camera.
     float edgeOn = smoothstep(0.02, 0.42, abs(dot(normalize(cameraPosition - vWorld), vec3(0.0, 0.0, 1.0))));
     float streaks = 0.62 + 0.38 * noise(vec2(vUv.x * 5.0 + vSeed, vWorld.y * 1.7 - uTime * 0.035));
     float body = across * along * streaks * edgeOn;
-    body *= mix(1.0, 0.35, vUv.y);
+    // Brighter where the beam leaves the skylight, thinning toward the water.
+    body *= mix(0.22, 1.0, pow(vUv.y, 0.8));
     gl_FragColor = vec4(vColor * vIntensity * body, 1.0);
   }
 `;
@@ -200,19 +201,24 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
   const floorY = LAYOUT.hall.deck;
   const ceilingY = LAYOUT.hall.ceiling;
   const height = ceilingY - floorY + 1.6;
-  const sunLean = -0.34;
+  // The sun sits at x = -12.5, y = 27, z = -14, so the beams leave the aperture
+  // and land ~4.3 m toward +X. Tilt the cards along that ray and centre them at
+  // the midpoint between the aperture and the water, so the shafts agree with the
+  // sun bars that the shadow map actually casts.
+  const sunLean = Math.atan2(12.5, 27);
+  const beamCenterX = 2.1;
   const cards: Card[] = [];
 
   // Skylight shafts, one per structural bay, tilted with the oblique sun.
   let index = 0;
-  for (let z = LAYOUT.skylight.zMin + 2; z <= LAYOUT.skylight.zMax - 1; z += 3.1) {
+  for (let z = LAYOUT.skylight.zMin + 2; z <= LAYOUT.skylight.zMax - 1; z += 4.2) {
     cards.push({
-      center: [sunLean * 2.2, (ceilingY + floorY) / 2 + 0.4, z],
-      width: 1.05 + rng.range(-0.1, 0.18),
+      center: [beamCenterX + rng.range(-0.25, 0.25), (ceilingY + floorY) / 2 + 0.4, z],
+      width: 0.7 + rng.range(-0.08, 0.12),
       height,
       tilt: sunLean,
       seed: index * 1.37,
-      intensity: (0.085 + rng.range(0, 0.03)) * intensity,
+      intensity: (0.05 + rng.range(0, 0.018)) * intensity,
       color: cool,
     });
     index += 1;
@@ -224,7 +230,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     height: 5.4,
     tilt: 0,
     seed: 3.1,
-    intensity: 0.11 * intensity,
+    intensity: 0.06 * intensity,
     color: warm,
   });
   cards.push({
@@ -233,7 +239,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     height: 5.4,
     tilt: 0,
     seed: 5.7,
-    intensity: 0.07 * intensity,
+    intensity: 0.035 * intensity,
     color: warm,
   });
 
@@ -281,7 +287,7 @@ export function buildVolumetrics(options: VolumetricOptions): Volumetrics {
     uniforms: {
       uTime: { value: 0 },
       uColor: { value: new Color(0xf2f6f4) },
-      uIntensity: { value: 0.3 * intensity },
+      uIntensity: { value: 0.22 * intensity },
       uPixelRatio: { value: 1 },
     },
   });

@@ -68,12 +68,13 @@ import {
  * per-probe hash).
  */
 
-const EMITTER_NAMES = new Set(['window-glass', 'skylight', 'fluorescent', 'warm-glow']);
+const EMITTER_NAMES = new Set(['window-glass', 'skylight', 'fluorescent', 'warm-glow', 'bulkhead-lamp']);
 const EMITTER_KIND_INDEX: Record<string, number> = {
   'window-glass': 1,
   skylight: 2,
   fluorescent: 3,
   'warm-glow': 4,
+  'bulkhead-lamp': 5,
 };
 /** Fraction of direct sun that survives each emitter pane type on a shadow ray. */
 const EMITTER_TRANSMISSION: Record<number, number> = {
@@ -81,6 +82,7 @@ const EMITTER_TRANSMISSION: Record<number, number> = {
   2: 0.62, // skylight panel, frosted
   3: 1,
   4: 1,
+  5: 1, // bulkhead lamp domes sit inside the hall
 };
 
 /** Mean texture reflectance for materials whose albedo map is not sampled on the CPU. */
@@ -125,6 +127,8 @@ export interface BakeStats {
   meshes: number;
   skippedMeshes: number;
   emitterTriangles: number;
+  emitterHits: number[];
+  misalignedGeometries: number;
   milliseconds: number;
   atlasSize: [number, number, number];
 }
@@ -132,6 +136,8 @@ export interface BakeStats {
 interface MergedScene {
   geometry: BufferGeometry;
   positions: Float32Array;
+  meshOf: Uint32Array;
+  names: string[];
   albedo: Float32Array;
   emission: Float32Array;
   emitterKind: Uint8Array;
@@ -139,6 +145,7 @@ interface MergedScene {
   meshCount: number;
   skipped: number;
   emitterTriangles: number;
+  misalignedGeometries: number;
 }
 
 function materialAlbedo(material: Material): [number, number, number] {
@@ -172,12 +179,21 @@ function materialAlbedo(material: Material): [number, number, number] {
 
 function materialEmission(material: Material): { radiance: [number, number, number]; kind: number } | null {
   if (!EMITTER_NAMES.has(material.name)) return null;
-  const color = (material as MeshBasicMaterial).color;
-  if (!color) return null;
+  const kind = EMITTER_KIND_INDEX[material.name] ?? 0;
   // An emissive pane with a modulation map emits its mean map value, not the
   // material's peak colour. Materials declare that mean in userData.
   const mean = (material.userData as { emissiveMean?: number }).emissiveMean ?? 1;
-  return { radiance: [color.r * mean, color.g * mean, color.b * mean], kind: EMITTER_KIND_INDEX[material.name] ?? 0 };
+  const standard = material as Material & { emissive?: Color; emissiveIntensity?: number };
+  if (standard.emissive) {
+    const intensity = (standard.emissiveIntensity ?? 1) * mean;
+    return {
+      radiance: [standard.emissive.r * intensity, standard.emissive.g * intensity, standard.emissive.b * intensity],
+      kind,
+    };
+  }
+  const color = (material as MeshBasicMaterial).color;
+  if (!color) return null;
+  return { radiance: [color.r * mean, color.g * mean, color.b * mean], kind };
 }
 
 function shouldBakeMesh(mesh: Mesh): boolean {
@@ -195,6 +211,8 @@ function shouldBakeMesh(mesh: Mesh): boolean {
 function mergeScene(scene: Scene): MergedScene {
   scene.updateMatrixWorld(true);
   const positionChunks: Float32Array[] = [];
+  const meshOfChunks: Uint32Array[] = [];
+  const names: string[] = [];
   const albedoChunks: Float32Array[] = [];
   const emissionChunks: Float32Array[] = [];
   const kindChunks: Uint8Array[] = [];
@@ -202,6 +220,7 @@ function mergeScene(scene: Scene): MergedScene {
   let meshCount = 0;
   let skipped = 0;
   let emitterTriangles = 0;
+  let misalignedGeometries = 0;
 
   scene.traverse((object) => {
     const mesh = object as Mesh;
@@ -219,6 +238,10 @@ function mergeScene(scene: Scene): MergedScene {
       return;
     }
     const triangleCount = Math.floor(position.count / 3);
+    if (position.array.length !== position.count * 3) {
+      misalignedGeometries += 1;
+      console.warn('[bake] non-contiguous position buffer on', mesh.name, position.array.length, position.count);
+    }
     const albedo = materialAlbedo(mesh.material as Material);
     const emission = materialEmission(mesh.material as Material);
     if (emission) emitterTriangles += triangleCount;
@@ -238,6 +261,10 @@ function mergeScene(scene: Scene): MergedScene {
         kindChunk[t] = emission.kind;
       }
     }
+    const meshOf = new Uint32Array(triangleCount);
+    meshOf.fill(meshCount);
+    meshOfChunks.push(meshOf);
+    names.push(mesh.name);
     albedoChunks.push(albedoChunk);
     emissionChunks.push(emissionChunk);
     kindChunks.push(kindChunk);
@@ -274,6 +301,17 @@ function mergeScene(scene: Scene): MergedScene {
   return {
     geometry,
     positions,
+    meshOf: (() => {
+      const total = meshOfChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const merged = new Uint32Array(total);
+      let offset = 0;
+      for (const chunk of meshOfChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return merged;
+    })(),
+    names,
     albedo: concatFloats(albedoChunks),
     emission: concatFloats(emissionChunks),
     emitterKind: concatBytes(kindChunks),
@@ -281,6 +319,7 @@ function mergeScene(scene: Scene): MergedScene {
     meshCount,
     skipped,
     emitterTriangles,
+    misalignedGeometries,
   };
 }
 
@@ -459,6 +498,19 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
   const merged = mergeScene(options.scene);
   const bvh = new MeshBVH(merged.geometry, { targetLeafSize: 12, maxDepth: 64 });
 
+  // three-mesh-bvh reorders the geometry's index buffer in place and reports the
+  // intersected triangle in *BVH order*. Every per-face table (albedo, emission,
+  // emitter kind, mesh name) is keyed by the original triangle order, so build the
+  // permutation once and translate every hit through it.
+  const bvhIndex = merged.geometry.index;
+  const bvhTriangleCount = Math.floor((bvhIndex?.count ?? merged.positions.length / 3) / 3);
+  const originalTriangle = new Uint32Array(bvhTriangleCount);
+  for (let t = 0; t < bvhTriangleCount; t++) {
+    const vertexIndex = bvhIndex ? bvhIndex.getX(t * 3) : t * 3;
+    originalTriangle[t] = Math.floor(vertexIndex / 3);
+  }
+  const originalTriangleOf = (hit: { faceIndex?: number | null }): number => originalTriangle[hit.faceIndex ?? 0] ?? 0;
+
   const grid = createProbeGrid(gridDimensionsForQuality(quality));
   const probes = probeCount(grid);
   const samplesPerProbe = samplesPerProbeForQuality(quality);
@@ -486,6 +538,7 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
   const pointLights = options.pointLights ?? [];
   let primaryRays = 0;
   let shadowRays = 0;
+  const emitterHits = [0, 0, 0, 0, 0, 0];
 
   /** Transmittance toward the sun: 0 shadowed, 1 direct, partial through frosted panes. */
   const sunTransmittance = (position: Vector3, normal: Vector3): number => {
@@ -496,7 +549,9 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
     ray.direction.copy(sunDirection);
     const hit = bvh.raycastFirst(ray, DoubleSide, 0.012, maxRayDistance);
     if (!hit) return 1;
-    const kind = merged.emitterKind[hit.faceIndex!] ?? 0;
+    // `faceIndex` is the triangle index (three-mesh-bvh `intersectTri` overwrites the
+    // vertex index), and the bake mesh is non-indexed, so per-face tables line up.
+    const kind = merged.emitterKind[originalTriangleOf(hit)] ?? 0;
     if (kind === 0) return 0;
     return EMITTER_TRANSMISSION[kind] ?? 1;
   };
@@ -518,13 +573,14 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
           primaryRays += 1;
           const hit = bvh.raycastFirst(ray, DoubleSide, 0.004, maxRayDistance);
           if (!hit) continue;
-          const faceIndex = hit.faceIndex!;
-          const kind = merged.emitterKind[faceIndex] ?? 0;
+          const triangle = originalTriangleOf(hit);
+          const kind = merged.emitterKind[triangle] ?? 0;
           const index = sampleBase + s;
           if (kind !== 0) {
-            radiance[0] = merged.emission[faceIndex * 3]!;
-            radiance[1] = merged.emission[faceIndex * 3 + 1]!;
-            radiance[2] = merged.emission[faceIndex * 3 + 2]!;
+            emitterHits[kind] = (emitterHits[kind] ?? 0) + 1;
+            radiance[0] = merged.emission[triangle * 3]!;
+            radiance[1] = merged.emission[triangle * 3 + 1]!;
+            radiance[2] = merged.emission[triangle * 3 + 2]!;
             shBasis(direction, basis);
             accumulateShSample(directSh, probeShOffset, radiance, basis, FOUR_PI / samplesPerProbe);
             continue;
@@ -535,13 +591,13 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
           samples.direction[index * 3 + 1] = direction[1];
           samples.direction[index * 3 + 2] = direction[2];
           towardProbe.set(probeWorld[0] - hitPoint.x, probeWorld[1] - hitPoint.y, probeWorld[2] - hitPoint.z).normalize();
-          faceNormalAt(merged, faceIndex, towardProbe, hitNormal);
+          faceNormalAt(merged, triangle, towardProbe, hitNormal);
           samples.normal[index * 3] = hitNormal.x;
           samples.normal[index * 3 + 1] = hitNormal.y;
           samples.normal[index * 3 + 2] = hitNormal.z;
-          samples.albedo[index * 3] = merged.albedo[faceIndex * 3]!;
-          samples.albedo[index * 3 + 1] = merged.albedo[faceIndex * 3 + 1]!;
-          samples.albedo[index * 3 + 2] = merged.albedo[faceIndex * 3 + 2]!;
+          samples.albedo[index * 3] = merged.albedo[triangle * 3]!;
+          samples.albedo[index * 3 + 1] = merged.albedo[triangle * 3 + 1]!;
+          samples.albedo[index * 3 + 2] = merged.albedo[triangle * 3 + 2]!;
           const transmission = sunTransmittance(hitPoint, hitNormal);
           const sunCos = Math.max(
             0,
@@ -628,6 +684,8 @@ export function bakeLighting(options: BakeOptions): BakedLighting {
     meshes: merged.meshCount,
     skippedMeshes: merged.skipped,
     emitterTriangles: merged.emitterTriangles,
+    emitterHits,
+    misalignedGeometries: merged.misalignedGeometries,
     milliseconds: performance.now() - startedAt,
     atlasSize: [width, height, depth],
   };

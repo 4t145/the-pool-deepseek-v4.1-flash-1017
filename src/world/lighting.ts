@@ -244,6 +244,17 @@ export function buildLighting(options: LightingOptions): Lighting {
     });
     scene.add(probes.volume);
     attenuateDielectricIbl(scene, 0.42);
+    const stats = probes.stats;
+    console.info(
+      `[pool] probe bake: ${stats.probes} probes ${stats.gridDims.join('x')}, N=${stats.samplesPerProbe}, ` +
+        `${stats.primaryRays} rays + ${stats.shadowRays} shadow, ${stats.bounces} bounces, ` +
+        `${stats.triangles} tris/${stats.meshes} meshes, ${stats.milliseconds.toFixed(0)} ms, hits ` + JSON.stringify(stats.emitterHits) + ', samples ' +
+        JSON.stringify({
+          floor: probes.sampleIrradiance([0, 0.4, 0], [0, 1, 0]).map((v) => Number(v.toFixed(3))),
+          ceiling: probes.sampleIrradiance([0, 8.2, 0], [0, -1, 0]).map((v) => Number(v.toFixed(3))),
+          corner: probes.sampleIrradiance([-8, 0.4, -28.8], [0.7, 0.7, 0]).map((v) => Number(v.toFixed(3))),
+        }),
+    );
   } catch (error) {
     console.warn('Probe bake failed; falling back to IBL-only lighting.', error);
   }
