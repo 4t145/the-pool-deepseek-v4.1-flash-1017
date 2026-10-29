@@ -30,7 +30,7 @@ export const VIGNETTE_AMOUNT = 0.24;
 export const CHROMATIC_AMOUNT = 1.0;
 /** Saturation and contrast of the contained grade (display space). */
 export const GRADE_SATURATION = 1.09;
-export const GRADE_CONTRAST = 1.075;
+export const GRADE_CONTRAST = 1.1;
 /** Grain cadence; the trailer steps the clock at exactly this rate. */
 export const GRAIN_FRAME_RATE = 24;
 /** Optional 2.39:1 presentation mask. */
