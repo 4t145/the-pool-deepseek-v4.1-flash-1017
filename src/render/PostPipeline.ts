@@ -25,6 +25,8 @@ import {
   GRAIN_AMOUNT,
   GRAIN_FRAME_RATE,
   GRADE_CONTRAST,
+  BLOOM_MASK_LAYER,
+  isBloomEmitter,
   GRADE_SATURATION,
   LETTERBOX_ASPECT,
   VIGNETTE_AMOUNT,
@@ -251,8 +253,8 @@ const FINAL_FRAGMENT = /* glsl */ `
     color = (color - 0.5) * uContrast + 0.5;
     float shadow = 1.0 - smoothstep(0.02, 0.44, luma);
     float highlight = smoothstep(0.62, 1.0, luma);
-    color += vec3(-0.003, 0.004, 0.008) * shadow;
-    color += vec3(0.004, 0.002, -0.002) * highlight;
+    color += vec3(-0.0035, 0.0045, 0.009) * shadow;
+    color += vec3(0.005, 0.002, -0.0025) * highlight;
 
     // Gentle vignette; never a black tube.
     float radius = length(centered * vec2(1.0, 0.82));
@@ -336,7 +338,7 @@ export class PostPipeline {
     this.quality = quality;
     this.options = {
       letterbox: options.letterbox,
-      exposure: options.exposure ?? 1.25,
+      exposure: options.exposure ?? 1.2,
       bloom: options.bloom ?? 0.34,
       toneCurve: options.toneCurve ?? 'agx',
       grain: options.grain ?? GRAIN_AMOUNT,
@@ -595,12 +597,8 @@ export class PostPipeline {
       const mesh = object as Mesh;
       if (!mesh.isMesh) return;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const emissive = materials.some((material) => {
-        if (!material) return false;
-        if (material.userData.bloom === true) return true;
-        return material.toneMapped === false && material.userData.bloom !== false;
-      });
-      if (emissive) mesh.layers.enable(1);
+      const emissive = materials.some((material) => (material ? isBloomEmitter(material) : false));
+      if (emissive) mesh.layers.enable(BLOOM_MASK_LAYER);
     });
   }
 
@@ -616,7 +614,7 @@ export class PostPipeline {
       renderer.setRenderTarget(target);
       renderer.clear(true, true, true);
       renderer.autoClear = false;
-      camera.layers.set(1);
+      camera.layers.set(BLOOM_MASK_LAYER);
       renderer.render(scene, camera);
     } finally {
       camera.layers.mask = previousLayerMask;
