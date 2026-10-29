@@ -160,7 +160,9 @@ float roughnessFactor = roughness;
     replacement: /* glsl */ `
 #if defined( USE_NORMALMAP_TANGENTSPACE )
   vec3 mapN = texture2D( normalMap, tileSample ).xyz * 2.0 - 1.0;
-  mapN.xy *= normalScale;
+  // Fade the micro-normal with screen footprint: sub-pixel bevel and glaze
+  // warp alias into specular fireflies on distance walls otherwise.
+  mapN.xy *= normalScale * mix( 0.12, 1.0, tileDetail );
   mapN.xy += tileTilt;
   mapN = normalize( mapN );
   normal = normalize( tbn * mapN );
