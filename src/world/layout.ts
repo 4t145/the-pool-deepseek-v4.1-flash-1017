@@ -72,11 +72,27 @@ export const LAYOUT = {
     topY: 1.34,
   },
   slide: {
-    tower: new Vector3(5.65, 0, -13.2),
+    /** Central tiled column the corkscrew wraps around. */
+    tower: new Vector3(4.55, 0, -14.5),
+    /** Top of the tower / red boarding platform. */
+    platformY: 6.55,
+    /** Funnel rim height above the platform. */
     topY: 7.15,
-    helixRadius: 2.35,
-    end: new Vector3(3.25, 0.28, -16.1),
-    tubeRadius: 0.98,
+    /** Mean helix radius of the authored control points. */
+    helixRadius: 1.5,
+    /** Outer tube radius in metres. */
+    tubeRadius: 0.82,
+    /**
+     * Mouth centre. The opening is partly below the water plane so the flume
+     * reads as half-drowned; the water system anchors contact foam here.
+     */
+    end: new Vector3(3.3, 0.55, -16.6),
+    /** Unit axis pointing out of the mouth, towards the flume/arrival cameras. */
+    mouthDirection: new Vector3(-0.95, -0.12, -0.28).normalize(),
+    /** Mouth opening radius, for foam/wake anchoring. */
+    mouthRadius: 0.86,
+    /** World height of the waterline the flume is stained at. */
+    waterlineY: 0,
   },
   rings: [
     { id: 'yellow', color: 0xe8b21b, position: new Vector3(-2.15, 0.045, -7.6), radius: 0.56, tube: 0.16, phase: 0.0 },
@@ -111,52 +127,64 @@ export const SHOTS: readonly CameraShot[] = [
     fov: 52,
   },
   {
+    // Three-quarter from the near-left corner: the whole corkscrew, the hollow
+    // mouth and its waterline reflection all read from here.
     id: 'flume',
     index: 2,
     label: 'The Flume',
-    position: [-1.6, 0.95, -18.6],
-    target: [4.65, 2.7, -12.9],
-    fov: 46,
+    position: [-2.4, 1.0, -20.2],
+    target: [4.2, 2.1, -15.2],
+    fov: 47,
   },
   {
+    // Almost at the surface, close enough that the ring, its reflection and the
+    // ripple rings behind it share the frame.
     id: 'ring',
     index: 3,
     label: 'Still Water',
-    position: [0.12, 0.62, -6.4],
-    target: [1.75, 0.08, -3.05],
-    fov: 42,
+    position: [1.05, 0.58, -4.9],
+    target: [1.8, 0.05, -3.05],
+    fov: 38,
   },
   {
+    // Off the centre line: the arch screen is seen in perspective, with the
+    // blue ring in the middle ground and the warm corridor beyond.
     id: 'arch',
     index: 4,
     label: 'The Arch',
-    position: [-0.3, 1.25, 6.5],
-    target: [0.0, 1.5, 29.0],
+    position: [2.6, 0.85, 2.0],
+    target: [-0.8, 2.0, 29.0],
     fov: 50,
   },
   {
+    // Low and close to the water: skylight slot above, frosted windows both
+    // sides, water and its floating punctuation in the bottom third.
     id: 'skylight',
     index: 5,
     label: 'Ascension',
-    position: [0.0, 0.45, -9.0],
-    target: [0.0, 8.6, 0.0],
+    position: [0.15, 0.42, -10.5],
+    target: [0.1, 5.8, 2.0],
     fov: 70,
   },
   {
+    // Material proof: coping, glazed tile under grazing light and the wet band
+    // at the waterline, framed along the wall with a chrome rail overhead.
     id: 'tile',
     index: 6,
     label: 'Skin',
-    position: [5.85, 1.05, -1.2],
-    target: [8.4, 0.55, -1.2],
-    fov: 34,
+    position: [6.55, 0.8, 2.6],
+    target: [7.4, 0.25, 4.2],
+    fov: 26,
   },
   {
+    // High over the near end: flume footprint on the left, rings receding, the
+    // whole basin and the arch screen in one frame.
     id: 'float',
     index: 7,
     label: 'Float',
-    position: [0.4, 5.6, -7.5],
-    target: [0.0, 0.0, 3.5],
-    fov: 55,
+    position: [1.9, 6.5, -22.0],
+    target: [1.2, 0.0, -7.0],
+    fov: 58,
   },
 ] as const;
 
@@ -169,20 +197,41 @@ export interface CinematicKey {
   fov: number;
 }
 
+const shotKey = (id: string, time: number): CinematicKey => {
+  const shot = getShot(id);
+  if (!shot) throw new Error(`CINEMATIC_KEYS references unknown shot "${id}"`);
+  return { time, position: shot.position, target: shot.target, fov: shot.fov };
+};
+
 /**
- * One slow, continuous take down the hall. Keys are deliberately sparse: the
- * curve supplies the smoothness, the key spacing supplies the rhythm.
+ * One slow, continuous take through the seven compositions, closed into a loop.
+ *
+ * The shot poses are reused verbatim (so the take literally visits each
+ * composition) and a single high return key eases the camera back toward the
+ * arrival pose. The path itself is a closed cubic Hermite cycle
+ * (`app/cameraPath.ts`): the wrap is C1-continuous in position and orientation,
+ * and the monotone tangents keep the camera from overshooting into the basin
+ * walls or the flume.
+ *
+ * The spacing is paced against segment length (roughly 1.3–1.8 m/s chord speed)
+ * so the take reads as one calm drift instead of fast transits between beats
+ * (peak translation is 1.78 m/s, peak pan 13.3 deg/s). The arrival pose stays on
+ * the loop point as a deliberate near-still beat.
  */
 export const CINEMATIC_KEYS: readonly CinematicKey[] = [
-  { time: 0.0, position: [0.35, 1.1, -25.4], target: [0.0, 1.2, -6.0], fov: 52 },
-  { time: 7.0, position: [1.2, 1.02, -21.0], target: [-3.2, 2.1, -12.0], fov: 48 },
-  { time: 13.0, position: [1.9, 0.92, -18.2], target: [-4.8, 2.8, -12.7], fov: 45 },
-  { time: 19.0, position: [0.5, 0.78, -11.2], target: [-1.6, 1.2, -5.0], fov: 47 },
-  { time: 25.0, position: [0.1, 0.62, -6.2], target: [1.8, 0.12, -3.0], fov: 43 },
-  { time: 31.0, position: [-0.2, 0.9, 0.5], target: [0.0, 1.2, 15.0], fov: 48 },
-  { time: 37.0, position: [0.0, 1.15, 5.0], target: [0.0, 2.4, 26.0], fov: 50 },
-  { time: 43.0, position: [0.0, 0.65, 8.0], target: [0.0, 7.8, 12.0], fov: 64 },
-  { time: 49.0, position: [0.0, 1.3, 12.0], target: [0.0, 2.2, 29.0], fov: 52 },
+  shotKey('arrival', 0),
+  shotKey('flume', 6),
+  shotKey('ring', 16),
+  shotKey('arch', 21),
+  shotKey('tile', 25.5),
+  shotKey('skylight', 36.5),
+  shotKey('float', 46.5),
+  {
+    time: 51,
+    position: [0.9, 2.8, -21.5],
+    target: [0.5, 1.4, -5.0],
+    fov: 55,
+  },
 ] as const;
 
-export const CINEMATIC_DURATION = 49;
+export const CINEMATIC_DURATION = 56;

@@ -1,0 +1,98 @@
+{
+  "generator": "closed camera path sampler, 240 Hz; deterministic",
+  "durationSeconds": 56,
+  "seam": {
+    "positionDelta": 3.353e-7,
+    "velocityDelta": 0.000001474
+  },
+  "motion": {
+    "maxSpeed": 1.784,
+    "maxSpeedAt": 32.17,
+    "maxTurnDegPerSecond": 13.29,
+    "maxTurnAt": 23.22,
+    "maxAcceleration": 0.951,
+    "minFlumeClearance": 1.26
+  },
+  "windows": [
+    {
+      "start": 0,
+      "end": 8,
+      "maxSpeed": 1.465,
+      "maxTurnDeg": 12.44
+    },
+    {
+      "start": 18,
+      "end": 27,
+      "maxSpeed": 1.587,
+      "maxTurnDeg": 13.29
+    },
+    {
+      "start": 36.5,
+      "end": 44.5,
+      "maxSpeed": 1.768,
+      "maxTurnDeg": 7
+    },
+    {
+      "start": 38,
+      "end": 46,
+      "maxSpeed": 1.768,
+      "maxTurnDeg": 7
+    },
+    {
+      "start": 46,
+      "end": 54,
+      "maxSpeed": 1.213,
+      "maxTurnDeg": 5.65
+    },
+    {
+      "start": 19.5,
+      "end": 27.5,
+      "maxSpeed": 1.352,
+      "maxTurnDeg": 13.29
+    }
+  ],
+  "beats": [
+    {
+      "id": "arrival",
+      "time": 0,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "flume",
+      "time": 6,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "ring",
+      "time": 16,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "arch",
+      "time": 21,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "skylight",
+      "time": 36.5,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "tile",
+      "time": 25.5,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    },
+    {
+      "id": "float",
+      "time": 46.5,
+      "poseError": 0,
+      "directionErrorDeg": 0
+    }
+  ]
+}
