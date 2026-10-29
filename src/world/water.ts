@@ -254,7 +254,7 @@ const FRAGMENT = /* glsl */ `
       float r = length(delta);
       float radius = uRingCenters[i].z;
       float tube = uRingCenters[i].w;
-      float band = 1.0 - smoothstep(tube * 0.9, tube * 2.1 + 0.06, abs(r - radius));
+      float band = 1.0 - smoothstep(tube * 0.55, tube * 1.2 + 0.02, abs(r - radius));
       foam = max(foam, band * (0.32 + 0.68 * noiseValue));
     }
     float mouthR = length(p - uMouth.xy);
@@ -324,7 +324,8 @@ const FRAGMENT = /* glsl */ `
     // reduced-resolution prepass; this adds the sharp lines back at full
     // resolution, absorbed by the same water column.
     float hitDepth = clamp(-hit.y, 0.0, 3.4);
-    float caustic = poolCausticLattice(hit.xz, uTime, hitDepth);
+    float causticMask = mix(1.0, 0.12, smoothstep(0.8, 3.2, pathLength));
+    float caustic = poolCausticLattice(hit.xz, uTime, hitDepth) * causticMask;
     refracted += uCausticColor * caustic * transmittance * uCausticStrength;
 
     refracted = mix(uDeepColor, refracted, uRefractionOn);
@@ -334,7 +335,7 @@ const FRAGMENT = /* glsl */ `
     vec2 distortion = normal.xz * uDistortion * (0.35 + 0.65 * (1.0 - ndv));
     // A still pool is not a perfect dielectric mirror: a thin film of suspended
     // matter at the interface pulls the reflection towards the deep body colour.
-    vec3 reflection = mix(reflectionColor(reflectUv + distortion, cameraDistance), uDeepColor, 0.22) * uReflectionStrength;
+    vec3 reflection = mix(reflectionColor(reflectUv + distortion, cameraDistance), uDeepColor, 0.1) * uReflectionStrength;
 
     vec3 color = mix(refracted, reflection, fresnel);
 
@@ -347,16 +348,16 @@ const FRAGMENT = /* glsl */ `
 
     // ---- Foam, scum and wakes -------------------------------------------
     float edge = min(uHalfWidth - abs(vWorld.x), uHalfLength - abs(vWorld.z));
-    float copingBand = 1.0 - smoothstep(0.0, 0.34, edge);
-    float scum = 1.0 - smoothstep(0.0, 0.075, edge);
-    float foam = copingBand * (0.16 + 0.5 * noiseValue) * 0.45;
-    foam += scum * 0.2 * (0.4 + 0.6 * fineNoise);
-    foam = max(foam, contactFoam(worldUv, fineNoise) * 0.6);
+    float copingBand = 1.0 - smoothstep(0.0, 0.2, edge);
+    float scum = 1.0 - smoothstep(0.0, 0.06, edge);
+    float foam = copingBand * (0.16 + 0.5 * noiseValue) * 0.2;
+    foam += scum * 0.09 * (0.4 + 0.6 * fineNoise);
+    foam = max(foam, contactFoam(worldUv, fineNoise) * 0.26);
     // A few drifting flecks, never white cartoon suds.
-    float flecks = smoothstep(0.78, 0.92, fineNoise) * smoothstep(0.3, 0.9, noiseValue) * 0.16;
+    float flecks = smoothstep(0.82, 0.94, fineNoise) * smoothstep(0.3, 0.9, noiseValue) * 0.055;
     foam += flecks;
     foam = saturate(foam * uFoamStrength);
-    vec3 foamColor = vec3(0.44, 0.48, 0.45) * (0.65 + 0.35 * noiseValue);
+    vec3 foamColor = vec3(0.42, 0.44, 0.42) * (0.5 + 0.5 * noiseValue);
     color = mix(color, foamColor, foam);
 
     // ---- Fog -------------------------------------------------------------
@@ -492,8 +493,8 @@ export function buildWater(
       uCameraPos: { value: camera.position.clone() },
       uSunDirection: { value: new Vector3(-12.5, 27, -14).normalize() },
       uSunColor: { value: new Color(0xfff0d2) },
-      uAbsorption: { value: new Vector3(0.95, 0.48, 0.55) },
-      uScatterColor: { value: new Color(0x0e2b27).multiplyScalar(0.35) },
+      uAbsorption: { value: new Vector3(2.6, 1.25, 1.35) },
+      uScatterColor: { value: new Color(0x0e2b27).multiplyScalar(0.12) },
       uDeepColor: { value: new Color(0x071817) },
       uFogColor: { value: new Color(0x93a9ac) },
       uFogDensity: { value: 0.0105 },
@@ -503,12 +504,12 @@ export function buildWater(
       uRingCenters: { value: ringCenters },
       uRingPhases: { value: ringPhases },
       uMouth: {
-        value: new Vector4(LAYOUT.slide.end.x, LAYOUT.slide.end.z, LAYOUT.slide.mouthRadius, 0.9),
+        value: new Vector4(LAYOUT.slide.end.x, LAYOUT.slide.end.z, LAYOUT.slide.mouthRadius, 0.5),
       },
       uRefractionOn: { value: 1 },
-      uCausticColor: { value: new Color(0xffe9c9).multiplyScalar(0.38) },
+      uCausticColor: { value: new Color(0xffe9c9).multiplyScalar(0.16) },
       uCausticStrength: { value: 1 },
-      uReflectionStrength: { value: 0.92 },
+      uReflectionStrength: { value: 1 },
       uFoamStrength: { value: 1 },
       uDistortion: { value: 0.018 },
     },
