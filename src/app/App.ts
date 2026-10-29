@@ -123,10 +123,10 @@ export class App {
     // into the lit materials before the room is built so the same lighting pass,
     // the refraction prepass and the planar reflection all see them.
     this.caustics = buildUnderwaterCaustics();
-    this.caustics.apply(materials.tileUnderwater, { strength: 1.7, scale: 1.0 });
-    this.caustics.apply(materials.tileFloor, { strength: 1.1, scale: 1.0 });
-    this.caustics.apply(materials.poolTileBand, { strength: 1.0, scale: 1.15 });
-    this.caustics.apply(materials.redPlastic, { strength: 0.7, scale: 1.3 });
+    this.caustics.apply(materials.tileUnderwater, { strength: 0.55, scale: 1.0 });
+    this.caustics.apply(materials.tileFloor, { strength: 0.35, scale: 1.0 });
+    this.caustics.apply(materials.poolTileBand, { strength: 0.3, scale: 1.15 });
+    this.caustics.apply(materials.redPlastic, { strength: 0.25, scale: 1.3 });
     await yieldToPaint();
 
     this.setLoading('BUILDING THE BASIN', 0.52);
@@ -138,7 +138,7 @@ export class App {
     // The flume uses its own cloned PVC + liner materials; register the caustics
     // hook on those as well so the submerged tube is lit like the basin tile.
     for (const material of this.props.causticTargets) {
-      this.caustics?.apply(material, { strength: 0.45, scale: 1.3 });
+      this.caustics?.apply(material, { strength: 0.2, scale: 1.3 });
     }
     await yieldToPaint();
 

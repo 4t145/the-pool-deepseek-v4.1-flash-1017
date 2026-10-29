@@ -1,0 +1,20 @@
+Water look correction (owner goal revision 1) — measured on this branch.
+
+Method: 1920x1080 ultra arrival, renderAt(2.4), AgX display output. The open-water
+sample is a 760x340 crop at x=1000,y=640 (pool mid-field, right of the flume
+reflection, excluding the skylight mirror at the far end); grayscale luma
+percentiles computed from the framebuffer PNG (ffmpeg raw gray, node statistics).
+
+Before (acceptedHead 864fad2): visual read - pale emerald, whole basin floor and
+lane stripes legible; the refraction sample dominated the surface.
+After (this branch): mean 0.21, p50 0.204, p90 0.322, p99 0.482 display luminance
+over the same crop. The floor is only faintly legible near the frame edges, the
+ceiling/wall structure is legible in the mirror at mid/far distance, and the
+near-field body is dark green-black.
+
+Absorption: sigma = (1.7, 0.9, 1.0) 1/m, in-scatter 0.12 x (0x0e2b27),
+reflection strength 0.62 with a 26 % deep-colour pull, Fresnel Schlick F0 = 0.02.
+Caustics: material strengths 0.55/0.35/0.30/0.25 (tile floor/underwater/lane/PVC),
+flume clones 0.20, full-res surface overlay 0.22 with a depth mask fading from
+1.0 at <=0.8 m path to 0.12 at 3.2 m. Foam: coping band 0.20, scum 0.09, ring
+contact band 0.26 (narrowed to 0.55-1.2 tube radii), flume mouth 0.5, flecks 0.055.
