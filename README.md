@@ -1,12 +1,11 @@
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
+# THE POOL
+
+
 made with `deepseek-v4.1-flash-1017` and [dsh-swarm](https://github.com/4t145/dsh-swarm)
 
 **Live demo:** https://deepseek-pool.4t145.com/  
-**Cloudflare Pages:** https://the-pool-ecc.pages.dev/  
-**Mirror:** https://4t145.github.io/the-pool-deepseek-v4.1-flash-1017/
-
-# THE POOL
 
 One flooded municipal pool hall, rendered in real time. White glazed tile, a long
 overcast skylight, black-green water, a red corkscrew flume that should not be
