@@ -2,7 +2,8 @@
 
 made with `deepseek-v4.1-flash-1017` and [dsh-swarm](https://github.com/4t145/dsh-swarm)
 
-**Live demo:** https://the-pool-ecc.pages.dev/  
+**Live demo:** https://deepseek-pool.4t145.com/  
+**Cloudflare Pages:** https://the-pool-ecc.pages.dev/  
 **Mirror:** https://4t145.github.io/the-pool-deepseek-v4.1-flash-1017/
 
 # THE POOL
